@@ -8,13 +8,13 @@ import argparse, os, time
 import mx_networks_utils.mx_model as mx_model
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--gpu", default='7', type=str, help="assign gpu")
+parser.add_argument("--gpu", default='6,7', type=str, help="assign gpu")
 parser.add_argument("--is_train", default=True, type=bool, help="train or test")
 parser.add_argument("--dataset_dir", default='/gs/home/yangjb/My_Job/dataset/face/cartoon', type=str, help="dir of dataset")
 parser.add_argument("--dataset_name", default='faces', type=str, help="name of dataset")
 parser.add_argument("--label_dir", default=None, type=str, help="dir of label file")
 parser.add_argument("--label_name", default=None, type=str, help="name of label file")
-parser.add_argument("--batch_size", default=64, type=int, help="batch size")
+parser.add_argument("--batch_size", default=64, type=int, help="batch size per gpu")
 parser.add_argument("--epoch", default=100, type=int, help="num of epoch")
 parser.add_argument('--img_size', nargs=3, default=[64, 64, 3], type=int, action='store',
                     help='with, height, channel of input image')
@@ -28,6 +28,14 @@ cfg = parser.parse_args()
 if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.gpu  # 指定第  块GPU可用
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
+    # TF_CPP_MIN_LOG_LEVEL 取值 0 ： 0也是默认值，输出所有信息
+    # TF_CPP_MIN_LOG_LEVEL 取值 1 ： 屏蔽通知信息
+    # TF_CPP_MIN_LOG_LEVEL 取值 2 ： 屏蔽通知信息和警告信息
+    # TF_CPP_MIN_LOG_LEVEL 取值 3 ： 屏蔽通知信息、警告信息和报错信息
+
+    # 把模型的变量分布在哪个GPU上给打印出来
+    tf.debugging.set_log_device_placement(True)
 
     # -------------------------------获取GPU列表---------------------------
     gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -37,17 +45,24 @@ if __name__ == '__main__':
     # ----------------设置不占用整块显卡， 用多少显存分配多少显存------------------------
     if gpus:
         try:
-            # 设置 GPU 显存占用为按需分配
             for gpu in gpus:
+                # 设置 GPU 显存占用为按需分配
                 tf.config.experimental.set_memory_growth(gpu, True)
+                # 设置GPU可见,一般一个物理GPU对应一个逻辑GPU
+                # tf.config.experimental.set_visible_devices(gpu, 'GPU')
+
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            num_gpu = len(logical_gpus)
             print('-*-*-' * 10, 'GPUS of device:', '-*-*-' * 10)
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+            print(len(gpus), "Physical GPUs,", num_gpu, "Logical GPUs")
             print('-*-*-' * 10, 'GPUS of device:', '-*-*-' * 10)
         except RuntimeError as e:
             # 异常处理
             print(e)
     # ----------------设置不占用整块显卡， 用多少显存分配多少显存------------------------
+
+    # 创建一个MirroredStrategy分发数据和计算图
+    strategy = tf.distribute.MirroredStrategy()
 
     # 构建模型
     if not os.path.exists(os.path.join(cfg.log_dir, cfg.dataset_name)):
@@ -59,5 +74,6 @@ if __name__ == '__main__':
     if not os.path.exists(os.path.join(cfg.g_image_dir, cfg.dataset_name)):
         os.makedirs(os.path.join(cfg.g_image_dir, cfg.dataset_name))
 
-    DG_model = mx_model.DetectionGAN(cfg)
+
+    DG_model = mx_model.DetectionGAN(cfg, strategy, num_gpu)
     DG_model.build_model()

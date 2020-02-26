@@ -38,8 +38,8 @@ def w_loss_fn(d_fake_logits, d_real_logits):
     :param d_real_logits:
     :return:
     '''
-    d_fake_logits = tf.reduce_mean(d_fake_logits)
-    d_real_logits = tf.reduce_mean(d_real_logits)
+    d_fake_logits = tf.reduce_mean(d_fake_logits, axis=1)
+    d_real_logits = tf.reduce_mean(d_real_logits, axis=1)
     d_loss = -d_real_logits + d_fake_logits
     g_loss = -d_fake_logits
     return d_loss, g_loss
