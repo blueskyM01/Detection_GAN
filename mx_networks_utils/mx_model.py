@@ -56,13 +56,16 @@ class DetectionGAN:
                         d_fake = D(batch_image_fake, self.cfg.is_train)
                         d_real = D(batch_image_real, self.cfg.is_train)
 
-                        d_loss = mx_ops.d_loss_fn(d_fake, d_real)
-                        g_loss = mx_ops.g_loss_fn(d_fake)
+                        # d_loss = mx_ops.d_loss_fn(d_fake, d_real)
+                        # g_loss = mx_ops.g_loss_fn(d_fake)
+                        d_loss, g_loss = mx_ops.w_loss_fn(d_fake_logits=d_fake, d_real_logits=d_real)
 
                     d_grads = tape.gradient(d_loss, D.trainable_variables)
-                    d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
-
                     g_grads = tape.gradient(g_loss, G.trainable_variables)
+
+                    d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
+                    for d_v in D.trainable_variables:
+                        d_v.assign_sub(tf.clip_by_value(d_v, -0.000001, 0.000001))
                     g_optimizer.apply_gradients(zip(g_grads, G.trainable_variables))
 
                     if counter % 100 == 0:
@@ -87,7 +90,7 @@ class DetectionGAN:
 
                     endtime = datetime.datetime.now()
                     timediff = (endtime - starttime).total_seconds()
-                    print('epoch:[%3d/%3d] step:[%5d/%5d] time:%2.4f d_loss: %2.5f g_loss:%2.5f' % \
+                    print('epoch:[%3d/%3d] step:[%5d/%5d] time:%2.4f d_loss: %3.5f g_loss:%3.5f' % \
                           (epoch, self.cfg.epoch, i, epoch_size, timediff, float(d_loss), float(g_loss)))
 
                     counter += 1

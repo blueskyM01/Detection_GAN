@@ -30,3 +30,16 @@ def g_loss_fn(d_fake_logits):
     # 计算生成图片与1之间的误差
     loss = celoss_ones(d_fake_logits)
     return loss
+
+def w_loss_fn(d_fake_logits, d_real_logits):
+    '''
+
+    :param d_fake_logits:
+    :param d_real_logits:
+    :return:
+    '''
+    d_fake_logits = tf.reduce_mean(d_fake_logits)
+    d_real_logits = tf.reduce_mean(d_real_logits)
+    d_loss = -d_real_logits + d_fake_logits
+    g_loss = -d_fake_logits
+    return d_loss, g_loss
