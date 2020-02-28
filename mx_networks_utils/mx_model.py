@@ -64,12 +64,14 @@ class DetectionGAN:
                         d_real = D(batch_image_real, self.cfg.is_train)
 
                         d_average_loss, g_average_loss = compute_loss(d_fake, d_real)
+                        gp = mx_ops.gradient_penalty(D, batch_image_real, batch_image_fake, d_fake.shape[0],
+                                                     is_train=self.cfg.is_train)
+                        d_average_loss = d_average_loss + self.cfg.grad_penalty_weight * gp
+
                     d_grads = tape.gradient(d_average_loss, D.trainable_variables)
                     g_grads = tape.gradient(g_average_loss, G.trainable_variables)
 
                     d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
-                    # for d_v in D.trainable_variables:
-                    #     d_v.assign_sub(tf.clip_by_value(d_v, -0.000001, 0.000001))
                     g_optimizer.apply_gradients(zip(g_grads, G.trainable_variables))
 
                     return d_average_loss, g_average_loss
@@ -97,25 +99,9 @@ class DetectionGAN:
                         inputs = next(self.db_train)
 
                         d_loss, g_loss = distributed_train_step(inputs)
-                        # # 判别器前向计算
-                        # with tf.GradientTape(persistent=True) as tape:
-                        #     batch_image_fake = G(batch_z, self.cfg.is_train)
-                        #     d_fake = D(batch_image_fake, self.cfg.is_train)
-                        #     d_real = D(batch_image_real, self.cfg.is_train)
-                        #
-                        #     # d_loss = mx_ops.d_loss_fn(d_fake, d_real)
-                        #     # g_loss = mx_ops.g_loss_fn(d_fake)
-                        #     d_loss, g_loss = mx_ops.w_loss_fn(d_fake_logits=d_fake, d_real_logits=d_real)
-                        #
-                        # d_grads = tape.gradient(d_loss, D.trainable_variables)
-                        # g_grads = tape.gradient(g_loss, G.trainable_variables)
-                        #
-                        # d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
-                        # for d_v in D.trainable_variables:
-                        #     d_v.assign_sub(tf.clip_by_value(d_v, -0.000001, 0.000001))
-                        # g_optimizer.apply_gradients(zip(g_grads, G.trainable_variables))
 
-                        if counter % 100 == 0:
+
+                        if counter % 40 == 0:
                             tf.summary.scalar('d_loss', float(d_loss), step=counter)
                             tf.summary.scalar('g_loss', float(g_loss), step=counter)
 

@@ -2,6 +2,7 @@ import  os, time
 import  numpy as np
 import  tensorflow as tf
 from    tensorflow import keras
+from tensorflow import random
 
 def celoss_ones(logits):
     # 计算属于与标签为1的交叉熵
@@ -43,3 +44,15 @@ def w_loss_fn(d_fake_logits, d_real_logits):
     d_loss = -d_real_logits + d_fake_logits
     g_loss = -d_fake_logits
     return d_loss, g_loss
+
+def gradient_penalty(D, real, fake, batch_size, is_train=True):
+    alpha = random.uniform([batch_size, 1, 1, 1], 0., 1.)
+    diff = fake - real
+    inter = real + (alpha * diff)
+    with tf.GradientTape() as t:
+        t.watch(inter)
+        pred = D(inter, is_train)
+    grad = t.gradient(pred, [inter])[0]
+    slopes = tf.sqrt(tf.reduce_sum(tf.square(grad), axis=[1, 2, 3]))
+    gp = tf.reduce_mean((slopes - 1.)**2)
+    return gp

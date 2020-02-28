@@ -20,10 +20,11 @@ parser.add_argument('--img_size', nargs=3, default=[64, 64, 3], type=int, action
                     help='with, height, channel of input image')
 parser.add_argument("--g_lr", default=0.00002, type=float, help="learning rate of G")
 parser.add_argument("--d_lr", default=0.00002, type=float, help="learning rate of D")
+parser.add_argument("--grad_penalty_weight", default=10.0, type=float, help="grad_penalty_weight")
 parser.add_argument("--log_dir", default='./results/logs', type=str, help="dir to save log file")
 parser.add_argument("--checkpoint_dir", default='./results/checkpoint', type=str, help="dir to save train reslut")
 parser.add_argument("--g_image_dir", default='./g_image_save', type=str, help="dir to save generated image")
-parser.add_argument("--tmp_result_name", default='1', type=str, help="dir to save generated image")
+parser.add_argument("--tmp_result_name", default='2', type=str, help="dir to save generated image")
 cfg = parser.parse_args()
 
 if __name__ == '__main__':
