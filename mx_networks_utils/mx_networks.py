@@ -11,19 +11,19 @@ class Generator(keras.Model):
         super(Generator, self).__init__()
         filter = 64
         # 转置卷积层1,输出channel为filter*8,核大小4,步长1,不使用padding,不使用偏置
-        self.conv1 = layers.Conv2DTranspose(filter * 8, 4, 1, 'valid', use_bias=False)
+        self.conv1 = layers.Conv2DTranspose(filter * 8, 4, 1, 'valid', use_bias=True)
         self.bn1 = layers.BatchNormalization()
         # 转置卷积层2
-        self.conv2 = layers.Conv2DTranspose(filter * 4, 4, 2, 'same', use_bias=False)
+        self.conv2 = layers.Conv2DTranspose(filter * 4, 4, 2, 'same', use_bias=True)
         self.bn2 = layers.BatchNormalization()
         # 转置卷积层3
-        self.conv3 = layers.Conv2DTranspose(filter * 2, 4, 2, 'same', use_bias=False)
+        self.conv3 = layers.Conv2DTranspose(filter * 2, 4, 2, 'same', use_bias=True)
         self.bn3 = layers.BatchNormalization()
         # 转置卷积层4
-        self.conv4 = layers.Conv2DTranspose(filter * 1, 4, 2, 'same', use_bias=False)
+        self.conv4 = layers.Conv2DTranspose(filter * 1, 4, 2, 'same', use_bias=True)
         self.bn4 = layers.BatchNormalization()
         # 转置卷积层5
-        self.conv5 = layers.Conv2DTranspose(3, 4, 2, 'same', use_bias=False)
+        self.conv5 = layers.Conv2DTranspose(3, 4, 2, 'same', use_bias=True)
 
     def call(self, inputs, training=None):
         x = inputs  # [z, 100]
@@ -50,20 +50,20 @@ class Discriminator(keras.Model):
         super(Discriminator, self).__init__()
         filter = 64
         # 卷积层
-        self.conv1 = layers.Conv2D(filter, 4, 2, 'valid', use_bias=False)
-        self.bn1 = layers.BatchNormalization()
+        self.conv1 = layers.Conv2D(filter, 4, 2, 'valid', use_bias=True)
+        self.bn1 = layers.LayerNormalization(epsilon=1e-4, axis=[1, 2, 3])
         # 卷积层
-        self.conv2 = layers.Conv2D(filter*2, 4, 2, 'valid', use_bias=False)
-        self.bn2 = layers.BatchNormalization()
+        self.conv2 = layers.Conv2D(filter*2, 4, 2, 'valid', use_bias=True)
+        self.bn2 = layers.LayerNormalization(epsilon=1e-4, axis=[1, 2, 3])
         # 卷积层
-        self.conv3 = layers.Conv2D(filter*4, 4, 2, 'valid', use_bias=False)
-        self.bn3 = layers.BatchNormalization()
+        self.conv3 = layers.Conv2D(filter*4, 4, 2, 'valid', use_bias=True)
+        self.bn3 = layers.LayerNormalization(epsilon=1e-4, axis=[1, 2, 3])
         # 卷积层
-        self.conv4 = layers.Conv2D(filter*8, 3, 1, 'valid', use_bias=False)
-        self.bn4 = layers.BatchNormalization()
+        self.conv4 = layers.Conv2D(filter*8, 3, 1, 'valid', use_bias=True)
+        self.bn4 = layers.LayerNormalization(epsilon=1e-4, axis=[1, 2, 3])
         # 卷积层
-        self.conv5 = layers.Conv2D(filter*16, 3, 1, 'valid', use_bias=False)
-        self.bn5 = layers.BatchNormalization()
+        self.conv5 = layers.Conv2D(filter*16, 3, 1, 'valid', use_bias=True)
+        self.bn5 = layers.LayerNormalization(epsilon=1e-4, axis=[1, 2, 3])
         # 全局池化层
         self.pool = layers.GlobalAveragePooling2D()
         # 特征打平
@@ -74,15 +74,15 @@ class Discriminator(keras.Model):
 
     def call(self, inputs, training=None):
         # 卷积-BN-激活函数:(4, 31, 31, 64)
-        x = tf.nn.leaky_relu(self.bn1(self.conv1(inputs), training=training))
+        x = tf.nn.leaky_relu(self.bn1(self.conv1(inputs)))
         # 卷积-BN-激活函数:(4, 14, 14, 128)
-        x = tf.nn.leaky_relu(self.bn2(self.conv2(x), training=training))
+        x = tf.nn.leaky_relu(self.bn2(self.conv2(x)))
         # 卷积-BN-激活函数:(4, 6, 6, 256)
-        x = tf.nn.leaky_relu(self.bn3(self.conv3(x), training=training))
+        x = tf.nn.leaky_relu(self.bn3(self.conv3(x)))
         # 卷积-BN-激活函数:(4, 4, 4, 512)
-        x = tf.nn.leaky_relu(self.bn4(self.conv4(x), training=training))
+        x = tf.nn.leaky_relu(self.bn4(self.conv4(x)))
         # 卷积-BN-激活函数:(4, 2, 2, 1024)
-        x = tf.nn.leaky_relu(self.bn5(self.conv5(x), training=training))
+        x = tf.nn.leaky_relu(self.bn5(self.conv5(x)))
         # 卷积-BN-激活函数:(4, 1024)
         x = self.pool(x)
         # 打平
