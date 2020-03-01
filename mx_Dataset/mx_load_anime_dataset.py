@@ -97,7 +97,7 @@ class mx_DatasetLoader:
         # 转换成张量
         # x: [0,255]=> -1~1
         x = tf.cast(x, dtype=tf.float32) / 255. * 2 - 1
-        z = tf.random.normal([100])
+        z = tf.random.normal([128])
 
         return x, z
 

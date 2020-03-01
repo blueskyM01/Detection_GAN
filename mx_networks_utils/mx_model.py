@@ -22,6 +22,7 @@ class DetectionGAN:
                                                                 shuffle=True, shuffle_size=1000,
                                                                 batch_size=self.totoal_batch_size,
                                                                 epoch=self.cfg.epoch)
+        self.k_t = tf.Variable(0., trainable=False)
 
 
     def build_model(self):
@@ -35,23 +36,24 @@ class DetectionGAN:
 
 
 
-                G = mx_net.Generator()
-                G.build(input_shape=(self.cfg.batch_size, 100))
-                D = mx_net.Discriminator()
-                D.build(input_shape=(self.cfg.batch_size, self.cfg.img_size[0], self.cfg.img_size[1], self.cfg.img_size[2]))
+                G = mx_net.mx_BE_Generator(self.cfg.filter_num)
+                G.build(input_shape=(None, 128))
+                D = mx_net.mx_BE_Discriminator(self.cfg.filter_num)
+                D.build(input_shape=(None, self.cfg.img_size[0], self.cfg.img_size[1], self.cfg.img_size[2]))
                 # 分别为生成器和判别器创建优化器
                 g_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.g_lr, beta_1=0.5)
                 d_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.d_lr, beta_1=0.5)
 
-                def compute_loss(d_fake, d_real):
-                    d_loss, g_loss = mx_ops.w_loss_fn(d_fake_logits=d_fake, d_real_logits=d_real)
+                def compute_loss(AE_real, AE_fake, real, fake, k_t):
+                    d_loss, g_loss, AE_real_loss = mx_ops.w_AE_loss_fn(AE_real, AE_fake, real, fake, k_t)
+
                     # 计算的是每块卡上的损失，即total_batch_size/num_gpu个样本
                     # 需要注意的是，这里的loss的shape应为 [-1, 1]，即每个样本的损失。
                     # tf.nn.compute_average_loss：会在即total_batch_size个样本loss的sum上求均值。如下，假设我们有三块卡，total_batch_size=64：
                     # GPU0:total_loss = 20,GPU1:total_loss = 30,GPU2:total_loss = 25 ----> (20 + 30 + 25) / 64 -> 20/64 + 30/64 + 25/64 + 26/64
                     d_average_loss = tf.nn.compute_average_loss(d_loss, global_batch_size=self.totoal_batch_size)
                     g_average_loss = tf.nn.compute_average_loss(g_loss, global_batch_size=self.totoal_batch_size)
-                    return d_average_loss, g_average_loss
+                    return d_average_loss, g_average_loss, AE_real_loss
 
                 # 使用distributed_train_step封装，因此不需要再用tf.function
                 # train_step在每一个GPU上运行，其输入是(total_batch_size / num_gpu)个样本，
@@ -59,20 +61,24 @@ class DetectionGAN:
                 def train_step(inputs):
                     batch_image_real, batch_z = inputs
                     with tf.GradientTape(persistent=True) as tape:
-                        batch_image_fake = G(batch_z, self.cfg.is_train)
-                        d_fake = D(batch_image_fake, self.cfg.is_train)
-                        d_real = D(batch_image_real, self.cfg.is_train)
+                        batch_image_fake = G(batch_z)
+                        d_fake = D(batch_image_fake)
+                        d_real = D(batch_image_real)
 
-                        d_average_loss, g_average_loss = compute_loss(d_fake, d_real)
-                        gp = mx_ops.gradient_penalty(D, batch_image_real, batch_image_fake, d_fake.shape[0],
-                                                     is_train=self.cfg.is_train)
-                        d_average_loss = d_average_loss + self.cfg.grad_penalty_weight * gp
+                        d_average_loss, g_average_loss, AE_real_loss = compute_loss(d_real, d_fake, batch_image_real, batch_image_fake, self.k_t)
+                        # gp = mx_ops.gradient_penalty(D, batch_image_real, batch_image_fake, d_fake.shape[0],
+                        #                              is_train=self.cfg.is_train)
+                        # d_average_loss = d_average_loss + self.cfg.grad_penalty_weight * gp
 
                     d_grads = tape.gradient(d_average_loss, D.trainable_variables)
                     g_grads = tape.gradient(g_average_loss, G.trainable_variables)
 
                     d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
                     g_optimizer.apply_gradients(zip(g_grads, G.trainable_variables))
+
+                    balance = 0.5 * tf.reduce_mean(AE_real_loss) - g_average_loss
+
+                    self.k_t.assign(tf.clip_by_value(self.k_t + 0.01 * balance, 0, 1))
 
                     return d_average_loss, g_average_loss
 
@@ -90,7 +96,7 @@ class DetectionGAN:
 
 
                 epoch_size = self.dataset_len // self.totoal_batch_size
-                batch_z_val = tf.random.normal([self.cfg.batch_size, 100])
+                batch_z_val = tf.random.normal([self.cfg.batch_size, 128])
                 counter = 0
 
                 for epoch in range(self.cfg.epoch):
@@ -100,12 +106,11 @@ class DetectionGAN:
 
                         d_loss, g_loss = distributed_train_step(inputs)
 
-
                         if counter % 40 == 0:
                             tf.summary.scalar('d_loss', float(d_loss), step=counter)
                             tf.summary.scalar('g_loss', float(g_loss), step=counter)
 
-                            val_images = G(batch_z_val, False)
+                            val_images = G(batch_z_val)
 
                             tf.summary.image("val_images:", val_images, max_outputs=9, step=counter)
 
@@ -123,7 +128,7 @@ class DetectionGAN:
 
                         endtime = datetime.datetime.now()
                         timediff = (endtime - starttime).total_seconds()
-                        print('epoch:[%3d/%3d] step:[%5d/%5d] time:%2.4f d_loss: %3.5f g_loss:%3.5f' % \
-                              (epoch, self.cfg.epoch, i, epoch_size, timediff, float(d_loss), float(g_loss)))
+                        print('epoch:[%3d/%3d] step:[%5d/%5d] time:%2.4f d_loss: %3.5f g_loss:%3.5f k_t:%3.5f' % \
+                              (epoch, self.cfg.epoch, i, epoch_size, timediff, float(d_loss), float(g_loss), float(self.k_t.numpy())))
 
                         counter += 1
