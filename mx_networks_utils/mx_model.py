@@ -28,7 +28,9 @@ class DetectionGAN:
     def build_model(self):
 
         # 创建log文件
-        summary_writer = tf.summary.create_file_writer(os.path.join(self.cfg.log_dir, self.cfg.tmp_result_name))
+        summary_writer = tf.summary.create_file_writer(os.path.join(self.cfg.results_dir,
+                                                                    self.cfg.log_dir,
+                                                                    self.cfg.tmp_result_name))
         with summary_writer.as_default():
             with self.strategy.scope():
                 dataset_distribute = self.strategy.experimental_distribute_dataset(self.dataset)
@@ -43,6 +45,10 @@ class DetectionGAN:
                 # 分别为生成器和判别器创建优化器
                 g_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.g_lr, beta_1=0.5)
                 d_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.d_lr, beta_1=0.5)
+
+                G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/generator.ckpt')
+                D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/discriminator.ckpt')
+                print('Loaded chpt!!')
 
                 def compute_loss(AE_real, AE_fake, real, fake, k_t):
                     d_loss, g_loss, AE_real_loss = mx_ops.w_AE_loss_fn(AE_real, AE_fake, real, fake, k_t)
@@ -116,13 +122,13 @@ class DetectionGAN:
 
                             img = mx_utils.m4_image_save_cv(val_images.numpy(), rows=8, zero_mean=True)
 
-                            cv2.imwrite(os.path.join(self.cfg.g_image_dir, self.cfg.tmp_result_name) + '/' + '%08d' % (counter) + '.jpg', img)
+                            cv2.imwrite(os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name) + '/' + '%08d' % (counter) + '.jpg', img)
                             print('add summary once....')
 
                         if counter % 1000 == 0:
-                            G.save_weights(os.path.join(os.path.join(self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
+                            G.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
                                                         'generator.ckpt'))
-                            D.save_weights(os.path.join(os.path.join(self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
+                            D.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
                                                         'discriminator.ckpt'))
                             print('save checkpoint....')
 
