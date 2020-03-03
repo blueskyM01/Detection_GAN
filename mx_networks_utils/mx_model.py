@@ -46,9 +46,9 @@ class DetectionGAN:
                 g_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.g_lr, beta_1=0.5)
                 d_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.d_lr, beta_1=0.5)
 
-                G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/generator.ckpt')
-                D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/discriminator.ckpt')
-                print('Loaded chpt!!')
+                # G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/generator.ckpt')
+                # D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/discriminator.ckpt')
+                # print('Loaded chpt!!')
 
                 def compute_loss(AE_real, AE_fake, real, fake, k_t):
                     d_loss, g_loss, AE_real_loss = mx_ops.w_AE_loss_fn(AE_real, AE_fake, real, fake, k_t)
@@ -125,11 +125,11 @@ class DetectionGAN:
                             cv2.imwrite(os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name) + '/' + '%08d' % (counter) + '.jpg', img)
                             print('add summary once....')
 
-                        if counter % 1000 == 0:
+                        if epoch % 2 == 0 and i == (epoch_size-1):
                             G.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
-                                                        'generator.ckpt'))
+                                                        'generator_%08d.ckpt' % (epoch)))
                             D.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
-                                                        'discriminator.ckpt'))
+                                                        'discriminator_%08d.ckpt' % (epoch)))
                             print('save checkpoint....')
 
                         endtime = datetime.datetime.now()
