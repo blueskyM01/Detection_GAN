@@ -6,14 +6,14 @@ import argparse
 def read_annotation(dataset_dir, dataset_name, label_dir, label_name, save_path):
     '''
     功能： Generate train.txt/val.txt/test.txt files One line for one image, in the format like：
-          image_index, image_absolute_path, img_width, img_height, box_1, box_2, ... box_n.
+          num_gt_boxes, image_absolute_path, img_width, img_height, box_1, box_2, ... box_n.
           Box_x format: label_index x_min y_min x_max y_max.
                         (The origin of coordinates is at the left top corner, left top => (xmin, ymin), right bottom => (xmax, ymax).)
-          image_index: is the line index which starts from zero.
+          num_gt_boxes: is the number of ground true boxes.
           label_index: is in range [0, class_num - 1].
           For example:
-          0 xxx/xxx/a.jpg 1920 1080 0 453 369 473 391 1 588 245 608 268
-          1 xxx/xxx/b.jpg 1920 1080 1 466 403 485 422 2 793 300 809 320
+          2 xxx/xxx/a.jpg 1920 1080 0 453 369 473 391 1 588 245 608 268
+          2 xxx/xxx/b.jpg 1920 1080 1 466 403 485 422 2 793 300 809 320
     :param dataset_dir: 具体的图像文件夹存储的目录
     :param dataset_name: 图像文件夹的名称
     :param label_dir: “.json”所在的目录
@@ -72,7 +72,8 @@ def read_annotation(dataset_dir, dataset_name, label_dir, label_name, save_path)
         counter = 0
         for key in name_box_id.keys():
             elem = []
-            elem.append(counter) # image_index
+            box_infos = name_box_id[key]
+            elem.append(len(box_infos)) # image_index
             counter += 1
             elem.append(key) # image_absolute_path
 
@@ -83,7 +84,7 @@ def read_annotation(dataset_dir, dataset_name, label_dir, label_name, save_path)
             elem.append(height)
 
             boxes = []
-            box_infos = name_box_id[key]
+
             for info in box_infos:
                 x_min = info[0][0]
                 y_min = info[0][1]
@@ -126,4 +127,4 @@ read_annotation(dataset_dir=cfg.dataset_dir,
                 label_name=cfg.label_name,
                 save_path=cfg.save_path)
 
-# python mx_coco_label_maker.py --dataset_dir='/gs/home/yangjb/My_Job/dataset/coco' --dataset_name='train2017' --label_dir='/gs/home/yangjb/My_Job/dataset/coco/annotations' --label_name='instances_train2017.json' --save_path='./Train_labels/trian_coco.txt'
+# python mx_coco_label_maker.py --dataset_dir='/gs/home/yangjb/My_Job/dataset/coco' --dataset_name='train2017' --label_dir='/gs/home/yangjb/My_Job/dataset/coco/annotations' --label_name='instances_train2017.json' --save_path='../Train_labels/train_coco11.txt'
