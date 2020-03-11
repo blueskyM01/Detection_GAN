@@ -8,17 +8,18 @@ import argparse, os, time
 import mx_networks_utils.mx_faster_rcnn_model as mx_faster_rcnn_model
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--gpu", default='0,1,7', type=str, help="assign gpu")
+parser.add_argument("--gpu", default='0', type=str, help="assign gpu")
 parser.add_argument("--is_train", default=True, type=bool, help="train or test")
 parser.add_argument("--dataset_dir", default='', type=str, help="dir of dataset")
 parser.add_argument("--dataset_name", default='coco', type=str, help="name of dataset")
 parser.add_argument("--label_dir", default='./Train_labels', type=str, help="dir of label file")
-parser.add_argument("--label_name", default='trainn_coco1.txt', type=str, help="name of label file")
+parser.add_argument("--label_name", default='train_coco.txt', type=str, help="name of label file")
+parser.add_argument("--class_path", default='./Train_labels/coco.names', type=str, help="path of class file")
 parser.add_argument("--batch_size", default=1, type=int, help="batch size")
 parser.add_argument("--epoch", default=200, type=int, help="num of epoch")
 parser.add_argument('--img_size', nargs=3, default=[416, 416, 3], type=int, action='store',
                     help='with, height, channel of input image')
-parser.add_argument("--lr", default=0.00002, type=float, help="learning rate of G")
+parser.add_argument("--lr", default=1e-3, type=float, help="learning rate of G")
 parser.add_argument("--log_dir", default='./logs', type=str, help="dir to save log file")
 parser.add_argument("--checkpoint_dir", default='./checkpoint', type=str, help="dir to save train reslut")
 parser.add_argument("--results_dir", default='./results', type=str, help="results dir")
@@ -29,7 +30,7 @@ cfg = parser.parse_args()
 if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.gpu  # 指定第  块GPU可用
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
     # TF_CPP_MIN_LOG_LEVEL 取值 0 ： 0也是默认值，输出所有信息
     # TF_CPP_MIN_LOG_LEVEL 取值 1 ： 屏蔽通知信息
     # TF_CPP_MIN_LOG_LEVEL 取值 2 ： 屏蔽通知信息和警告信息
@@ -72,11 +73,6 @@ if __name__ == '__main__':
     if not os.path.exists(os.path.join(cfg.results_dir, cfg.generate_image_dir, cfg.tmp_result_name)):
         os.makedirs(os.path.join(cfg.results_dir, cfg.generate_image_dir, cfg.tmp_result_name))
 
-    # 创建一个MirroredStrategy分发数据和计算图
-    # This will create a MirroredStrategy instance which will use all the GPUs that are visible to TensorFlow
-    strategy = tf.distribute.MirroredStrategy()
-    # only some of the GPUs on your machine, you can do so like this:
-    # strategy = tf.distribute.MirroredStrategy(devices=["/gpu:0", "/gpu:1"])
 
-    faster_rcnn_model = mx_faster_rcnn_model.FasterRCNN(cfg, strategy)
+    faster_rcnn_model = mx_faster_rcnn_model.FasterRCNN(cfg)
     faster_rcnn_model.build_model()

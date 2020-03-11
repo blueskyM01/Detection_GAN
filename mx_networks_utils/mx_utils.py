@@ -99,3 +99,28 @@ def m4_image_save_cv(images, rows=4, zero_mean=True):
 
     merge_image = cv2.cvtColor(merge_image, cv2.COLOR_BGR2RGB)  # cv2默认为bgr顺序
     return merge_image
+
+def mx_draw_boundingboxes(img, boxes, labels, filename):
+    '''
+
+    :param img: -1~1
+    :param boxes: np.array, shape=[-1,4] (xmin, ymin, xmax, ymax)
+    :param labels: np.array, shape=(-1,)
+    :param filename:
+    :return:
+    '''
+    # -1~1 ---> 0~255
+    img = img * 127.5 + 127.5
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # cv2默认为bgr顺序
+    if img.dtype != np.uint8:
+        img = img.astype(np.uint8)
+
+    for box, label in zip(boxes, labels):
+        x0 = int(box[0])
+        y0 = int(box[1])
+        x1 = int(box[2])
+        y1 = int(box[3])
+        cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
+        cv2.putText(img, str(label), (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+    cv2.imwrite(filename, img)
+

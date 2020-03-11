@@ -6,7 +6,7 @@ from tensorflow.keras import layers, Sequential
 import argparse, os, time, sys, datetime, cv2
 sys.path.append('../')
 import mx_networks_utils.mx_networks as mx_net
-import mx_Dataset.mx_load_anime_dataset as mx_data_loader
+import mx_Dataset.mx_load_dataset as mx_data_loader
 import mx_networks_utils.mx_ops as mx_ops
 import mx_networks_utils.mx_utils as mx_utils
 
@@ -65,7 +65,11 @@ class DetectionGAN:
                 # train_step在每一个GPU上运行，其输入是(total_batch_size / num_gpu)个样本，
                 # 因此计算的也是(total_batch_size / num_gpu)个样本的loss值
                 def train_step(inputs):
-                    batch_image_real, batch_z = inputs
+
+                    num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
+
+
+
                     with tf.GradientTape(persistent=True) as tape:
                         batch_image_fake = G(batch_z)
                         d_fake = D(batch_image_fake)

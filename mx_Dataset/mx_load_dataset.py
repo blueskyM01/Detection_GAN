@@ -76,7 +76,8 @@ class mx_DatasetLoader:
         labels = tf.convert_to_tensor(labels) # 转换成张量
         img_width = tf.convert_to_tensor(img_width)
         img_height = tf.convert_to_tensor(img_height)
-        return num_gt, img, boxes, labels, img_width, img_height
+        z = tf.random.normal([128])
+        return num_gt, img, boxes, labels, img_width, img_height, z
 
     def get_label(self, dataset_name, label_dir, label_name):
         '''
@@ -181,7 +182,7 @@ if __name__ == '__main__':
     for epoch in range(100):
         for step in range(10):
             starttime = datetime.datetime.now()
-            num_gt, img, boxes, labels, img_width, img_height = next(db_train)
+            num_gt, img, boxes, labels, img_width, img_height, z = next(db_train)
 
             img = img.numpy()
             boxes = boxes.numpy()
@@ -211,7 +212,7 @@ if __name__ == '__main__':
                     x1 = int(box[2])
                     y1 = int(box[3])
                     cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
-                    cv2.putText(img, classes[label], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                    cv2.putText(img, classes[label], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
 
                 cv2.imwrite('../tmp/'+str(counter) + '.jpg', img)
 
