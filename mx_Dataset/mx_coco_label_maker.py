@@ -127,4 +127,4 @@ read_annotation(dataset_dir=cfg.dataset_dir,
                 label_name=cfg.label_name,
                 save_path=cfg.save_path)
 
-# python mx_coco_label_maker.py --dataset_dir='/gs/home/yangjb/My_Job/dataset/coco' --dataset_name='train2017' --label_dir='/gs/home/yangjb/My_Job/dataset/coco/annotations' --label_name='instances_train2017.json' --save_path='../Train_labels/train_coco11.txt'
+# python ./mx_Dataset/mx_coco_label_maker.py --dataset_dir='/gs/home/yangjb/My_Job/dataset/coco' --dataset_name='train2017' --label_dir='/gs/home/yangjb/My_Job/dataset/coco/annotations' --label_name='instances_train2017.json' --save_path='./Train_labels/train_coco.txt'
