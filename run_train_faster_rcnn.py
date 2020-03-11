@@ -8,7 +8,7 @@ import argparse, os, time
 import mx_networks_utils.mx_faster_rcnn_model as mx_faster_rcnn_model
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--gpu", default='0', type=str, help="assign gpu")
+parser.add_argument("--gpu", default='1', type=str, help="assign gpu")
 parser.add_argument("--is_train", default=True, type=bool, help="train or test")
 parser.add_argument("--dataset_dir", default='', type=str, help="dir of dataset")
 parser.add_argument("--dataset_name", default='coco', type=str, help="name of dataset")
@@ -30,7 +30,7 @@ cfg = parser.parse_args()
 if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.gpu  # 指定第  块GPU可用
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
     # TF_CPP_MIN_LOG_LEVEL 取值 0 ： 0也是默认值，输出所有信息
     # TF_CPP_MIN_LOG_LEVEL 取值 1 ： 屏蔽通知信息
     # TF_CPP_MIN_LOG_LEVEL 取值 2 ： 屏蔽通知信息和警告信息

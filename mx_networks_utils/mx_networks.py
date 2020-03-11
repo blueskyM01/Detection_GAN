@@ -212,10 +212,10 @@ class Faster_RCNN(keras.Model):
         self.feature_shape = self.rpn_head.feature_shape
         # rcnn
         proposals = self.get_proposal(rpn_probs, rpn_deltas)  # 坐标归一化了
-        rois, self.target_matchs, self.target_deltas = self.build_fast_rcnn_targer(proposals, boxes, labels,
+        self.rois, self.target_matchs, self.target_deltas = self.build_fast_rcnn_targer(proposals, boxes, labels,
                                                                          [self.cfg.img_size[0],
                                                                           self.cfg.img_size[1]])
-        cropped_roi_features = self.roi_pooling(rois, feature_map)
+        cropped_roi_features = self.roi_pooling(self.rois, feature_map)
         rcnn_logits, rcnn_deltas = self.rcnn_head(cropped_roi_features)
 
 
@@ -312,6 +312,90 @@ class Faster_RCNN(keras.Model):
                                                         box_indices=tf.zeros(shape=[N, ], dtype=tf.int32),
                                                         crop_size=[14, 14])
         return cropped_roi_features
+
+    def get_detection_boxes(self, rcnn_logits, rcnn_deltas, image_size):
+        '''
+
+        :param rcnn_logits:
+        :param rcnn_deltas:
+        :param image_size:
+        :return:
+        '''
+        H, W = image_size
+        # Class IDs per ROI
+        class_ids = tf.argmax(rcnn_logits, axis=1, output_type=tf.int32)
+        # Class probability of the top class of each ROI
+        indices = tf.stack([tf.range(rcnn_logits.shape[0]), class_ids], axis=1)
+        class_scores = tf.gather_nd(rcnn_logits, indices)
+
+        # Class-specific bounding box deltas
+        deltas_specific = tf.gather_nd(rcnn_deltas, indices)
+
+        # Apply bounding box deltas
+        # Shape: [num_rois, (y1, x1, y2, x2)] in normalized coordinates
+        refined_rois = mx_ops.mx_decode_bbox2delta(self.rois, deltas_specific)
+
+        # Clip boxes to image window
+        refined_rois *= tf.constant([H, W, H, W], dtype=tf.float32)
+        window = tf.constant([0., 0., H * 1., W * 1.], dtype=tf.float32)
+        refined_rois = mx_ops.bbox_clip(refined_rois, window)
+
+        # Filter out background boxes
+        keep = tf.where(class_ids > 0)[:, 0]
+        # Filter out low confidence boxes
+        if self.RCNN_MIN_CONFIDENCE:
+            conf_keep = tf.where(class_scores >= self.RCNN_MIN_CONFIDENCE)[:, 0]
+            keep = tf.compat.v2.sets.intersection(tf.expand_dims(keep, 0),
+                                                  tf.expand_dims(conf_keep, 0))
+            keep = tf.sparse.to_dense(keep)[0]
+
+        # Apply per-class NMS
+        # 1. Prepare variables
+        pre_nms_class_ids = tf.gather(class_ids, keep)
+        pre_nms_scores = tf.gather(class_scores, keep)
+        pre_nms_rois = tf.gather(refined_rois, keep)
+        unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
+
+        def nms_keep_map(class_id):
+            '''Apply Non-Maximum Suppression on ROIs of the given class.'''
+            # Indices of ROIs of the given class
+            ixs = tf.where(tf.equal(pre_nms_class_ids, class_id))[:, 0]
+            # Apply NMS
+            class_keep = tf.image.non_max_suppression(
+                    tf.gather(pre_nms_rois, ixs),
+                    tf.gather(pre_nms_scores, ixs),
+                    max_output_size=self.RCNN_MAX_INSTANCES,
+                    iou_threshold=self.RCNN_NME_THRESHOLD)
+            # Map indices
+            class_keep = tf.gather(keep, tf.gather(ixs, class_keep))
+            return class_keep
+
+        # 2. Map over class IDs
+        nms_keep = tf.constant([], dtype=tf.float32)
+        for i in range(unique_pre_nms_class_ids.shape[0]):
+            nms_keep = tf.concat([nms_keep, tf.cast(nms_keep_map(unique_pre_nms_class_ids[i]), tf.float32)], axis=0)
+
+        # 3. Compute intersection between keep and nms_keep
+        keep = tf.cast(keep, tf.int64)
+        nms_keep = tf.cast(nms_keep, tf.int64)
+        keep = tf.compat.v2.sets.intersection(tf.expand_dims(keep, 0),
+                                              tf.expand_dims(nms_keep, 0))
+        keep = tf.sparse.to_dense(keep)[0]
+        # Keep top detections
+        roi_count = self.RCNN_MAX_INSTANCES
+        class_scores_keep = tf.gather(class_scores, keep)
+        num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
+        top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
+        keep = tf.gather(keep, top_ids)
+
+        detections = tf.concat([
+            tf.gather(refined_rois, keep),
+            tf.cast(tf.gather(class_ids, keep), tf.float32)[..., tf.newaxis],
+            tf.gather(class_scores, keep)[..., tf.newaxis]
+        ], axis=1)
+
+        return detections
+
 
 
 class FPN(keras.Model):

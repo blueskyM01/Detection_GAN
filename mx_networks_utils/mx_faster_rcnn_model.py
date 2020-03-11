@@ -159,8 +159,34 @@ class FasterRCNN:
 
                         # print(counter)
                         # cv2.imwrite('./tmp/' + str(counter) + '.jpg', image_drow_boxes[0].numpy() * 127.5 + 127.5)
+                    if counter % 100 == 0:
+                        detections = self.faster_rcnn.get_detection_boxes(rcnn_logits, rcnn_deltas,
+                                                                      [self.cfg.img_size[0], self.cfg.img_size[1]])
+                        detections_np = detections.numpy()
+                        img = batch_image_real[0].numpy() * 127.5 + 127.5
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        for ann in detections_np:
+                            box = ann[:4]
+                            y0 = box[0]
+                            x0 = box[1]
+                            y1 = box[2]
+                            x1 = box[3]
+                            label = int(ann[4])
+                            score = ann[5]
+                            cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
+                            cv2.putText(img, self.classes[label], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                            cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+                        img_path = os.path.join(os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))
+                        cv2.imwrite(img_path + '/' + str(counter) + '.jpg', img)
 
 
+
+                    if counter % 2000 == 0:
+                        self.faster_rcnn.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
+                                                    'faster_rcnn_%04d.ckpt' % (epoch)))
+
+                        print('save checkpoint....')
 
                     endtime = datetime.datetime.now()
                     timediff = (endtime - starttime).total_seconds()
