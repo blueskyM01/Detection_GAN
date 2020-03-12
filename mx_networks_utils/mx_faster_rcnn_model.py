@@ -174,7 +174,7 @@ class FasterRCNN:
                             label = int(ann[4])
                             score = ann[5]
                             cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
-                            cv2.putText(img, self.classes[label], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                            cv2.putText(img, self.classes[label-1], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                             cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
                         img_path = os.path.join(os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))

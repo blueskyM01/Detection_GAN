@@ -645,7 +645,7 @@ class RCNNHead(keras.Model):
         deltas = self.rcnn_delta_fc(x)
         deltas = tf.reshape(deltas, (-1, self.num_classes, 4))
 
-        return logits, deltas
+        return probs, deltas
     def rcnn_loss(self, logits, deltas, target_matchs, target_deltas):
         '''
 
