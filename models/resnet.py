@@ -63,7 +63,7 @@ class ResNet(keras.Model):
         self.training = training
         self.padding = layers.ZeroPadding2D((3, 3))
         self.conv1 = layers.Conv2D(64, (7, 7),
-                                   strides=(1, 1),   # different (2,2) ----> (1, 1)
+                                   strides=(1, 1),
                                    kernel_initializer='he_normal')
         self.bn_conv1 = layers.BatchNormalization()
         self.max_pool = layers.MaxPooling2D((3, 3), strides=(2, 2), padding='same')
@@ -78,13 +78,13 @@ class ResNet(keras.Model):
         x = self.conv1(x)
         x = self.bn_conv1(x, training=self.training)
         x = tf.nn.relu(x)
-        # x = self.max_pool(x) # different
+        x = self.max_pool(x)
 
-        x = self.res2(x)
-        x = self.res3(x)
-        x = self.res4(x)
-        x = self.res5(x)
-        return x
+        out2 = self.res2(x)
+        out3 = self.res3(out2)
+        out4 = self.res4(out3)
+        out5 = self.res5(out4)
+        return out2, out3, out4, out5
 
     def build_block(self, filters=[64, 64, 256], num_blocks=3, stride=1, training=True):
         blocks = Sequential()
@@ -98,8 +98,9 @@ def resnet50(training=True):
     res = ResNet(layer_dims=[3,4,6,3], training=training)
     return res
 
+# [3,4,23,3]
 def resnet101(training=True):
-    res = ResNet(layer_dims=[3,4,23,3], training=training)
+    res = ResNet(layer_dims=[3,4,6,3], training=training)
     return res
 
 def resnet152(training=True):

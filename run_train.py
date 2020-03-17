@@ -8,13 +8,13 @@ import argparse, os, time
 import mx_networks_utils.mx_model as mx_model
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--gpu", default='0,1,7', type=str, help="assign gpu")
+parser.add_argument("--gpu", default='0,1', type=str, help="assign gpu")
 parser.add_argument("--is_train", default=True, type=bool, help="train or test")
-parser.add_argument("--dataset_dir", default='/gs/home/yangjb/My_Job/dataset/face/cartoon', type=str, help="dir of dataset")
-parser.add_argument("--dataset_name", default='faces', type=str, help="name of dataset")
-parser.add_argument("--label_dir", default=None, type=str, help="dir of label file")
-parser.add_argument("--label_name", default=None, type=str, help="name of label file")
-parser.add_argument("--batch_size", default=32, type=int, help="batch size")
+parser.add_argument("--dataset_dir", default='', type=str, help="dir of dataset")
+parser.add_argument("--dataset_name", default='coco', type=str, help="name of dataset")
+parser.add_argument("--label_dir", default='./Train_labels', type=str, help="dir of label file")
+parser.add_argument("--label_name", default='train_coco.txt', type=str, help="name of label file")
+parser.add_argument("--batch_size", default=16, type=int, help="batch size")
 parser.add_argument("--epoch", default=200, type=int, help="num of epoch")
 parser.add_argument('--img_size', nargs=3, default=[256, 256, 3], type=int, action='store',
                     help='with, height, channel of input image')
@@ -26,7 +26,7 @@ parser.add_argument("--log_dir", default='./logs', type=str, help="dir to save l
 parser.add_argument("--checkpoint_dir", default='./checkpoint', type=str, help="dir to save train reslut")
 parser.add_argument("--results_dir", default='./results', type=str, help="results dir")
 parser.add_argument("--generate_image_dir", default='./generate_image', type=str, help="dir to save generated image")
-parser.add_argument("--tmp_result_name", default='256x256', type=str, help="tmp file save dir")
+parser.add_argument("--tmp_result_name", default='256x256-2', type=str, help="tmp file save dir")
 cfg = parser.parse_args()
 
 if __name__ == '__main__':

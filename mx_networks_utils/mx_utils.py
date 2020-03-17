@@ -1,7 +1,7 @@
 import cv2, time, os, random
 import numpy as np
 import tensorflow as tf
-
+import logging
 
 def get_label(label_dir, label_name):
     '''
@@ -27,6 +27,7 @@ def get_label(label_dir, label_name):
     random.shuffle(lines)
     return lines
 
+
 def get_classes(class_file):
     classes = []
     with open(class_file, 'r') as f:
@@ -35,6 +36,7 @@ def get_classes(class_file):
             classes.append(line.rstrip('\n'))
             line = f.readline()
     return classes
+
 
 def parse_line(line):
     '''
@@ -55,7 +57,8 @@ def parse_line(line):
     labels = []
     s = line[4:]
     for i in range(len(s) // 5):
-        label, xmin, ymin, xmax, ymax = int(s[i*5]), float(s[i*5+1]), float(s[i*5+2]), float(s[i*5+3]), float(s[i*5+4])
+        label, xmin, ymin, xmax, ymax = int(s[i * 5]), float(s[i * 5 + 1]), float(s[i * 5 + 2]), float(
+            s[i * 5 + 3]), float(s[i * 5 + 4])
         boxes.append([xmin, ymin, xmax, ymax])
         labels.append(label)
     boxes = np.asarray(boxes, np.float32)
@@ -70,10 +73,11 @@ def mx_get_roi_boxes(img):
     roi_boxes = []
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
-        xmin, ymin, xmax, ymax = x, y, x+w, y+h
+        xmin, ymin, xmax, ymax = x, y, x + w, y + h
         roi_boxes.append([xmin, ymin, xmax, ymax])
     roi_boxes_np = np.array(roi_boxes)
     return roi_boxes_np
+
 
 def m4_image_save_cv(images, rows=4, zero_mean=True):
     # introduction: a series of images save as a picture
@@ -100,6 +104,7 @@ def m4_image_save_cv(images, rows=4, zero_mean=True):
     merge_image = cv2.cvtColor(merge_image, cv2.COLOR_BGR2RGB)  # cv2默认为bgr顺序
     return merge_image
 
+
 def mx_draw_boundingboxes(img, boxes, labels, filename):
     '''
 
@@ -124,3 +129,59 @@ def mx_draw_boundingboxes(img, boxes, labels, filename):
         cv2.putText(img, str(label), (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
     cv2.imwrite(filename, img)
 
+
+def conver_to_roi_image(num_gt, imgs, boxes):
+    '''
+    Introduction: 生成roi图像
+    :param num_gt: shape=(batch_size,), int
+    :param imgs: shape=(batch_size, h, w, 3) -1~1
+    :param boxes: [batch_size, -1, 4] [x0, y0, x1, y1]
+    :return:
+    '''
+    roi_imgs = []
+    for idx in range(imgs.shape[0]):
+        box = boxes[idx]
+        img = imgs[idx] * 0.5
+        num = num_gt[idx]
+
+        box_val = box[:num, :]
+
+        for b in box_val:
+            x0 = int(b[0])
+            y0 = int(b[1])
+            x1 = int(b[2])
+            y1 = int(b[3])
+            cv2.rectangle(img, (x0, y0), (x1, y1), (1, 1, 1), 4)
+        roi_imgs.append(img)
+    return np.array(roi_imgs)
+
+
+def log_creater(output_dir, filenale):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    log_name = '{}.log'.format(time.strftime(filenale))
+    final_log_file = os.path.join(output_dir, log_name)
+    # creat a log
+    log = logging.getLogger('train_log')
+    log.setLevel(logging.DEBUG)
+    # FileHandler
+    file = logging.FileHandler(final_log_file)
+    file.setLevel(logging.DEBUG)
+
+    # StreamHandler
+    stream = logging.StreamHandler()
+    stream.setLevel(logging.DEBUG)
+    return log, file, stream, final_log_file
+
+def log_write(log, file, stream, final_log_file, formatter):
+    # Formatter
+
+    # setFormatter
+    file.setFormatter(formatter)
+    stream.setFormatter(formatter)
+    # addHandler
+    log.addHandler(file)
+    log.addHandler(stream)
+
+    log.info('creating {}'.format(final_log_file))

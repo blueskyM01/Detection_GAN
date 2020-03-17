@@ -36,8 +36,6 @@ class DetectionGAN:
                 dataset_distribute = self.strategy.experimental_distribute_dataset(self.dataset)
                 self.db_train = iter(dataset_distribute)
 
-
-
                 G = mx_net.mx_BE_Generator(self.cfg.filter_num)
                 G.build(input_shape=(None, 128))
                 D = mx_net.mx_BE_Discriminator(self.cfg.filter_num)
@@ -65,17 +63,40 @@ class DetectionGAN:
                 # train_step在每一个GPU上运行，其输入是(total_batch_size / num_gpu)个样本，
                 # 因此计算的也是(total_batch_size / num_gpu)个样本的loss值
                 def train_step(inputs):
-
                     num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
 
+                    roi_images = tf.constant([], shape=[0, self.cfg.img_size[0], self.cfg.img_size[1], 3], dtype=tf.float32)
+                    for i in range(batch_image_real.shape[0]):
+                        image = batch_image_real[i]
+                        image_mask = image * 0.5
+                        num_gt_idx = num_gt[i]
+                        boxes_ = boxes[i]
 
+                        # 取出有效的boxes
+                        boxes_value = boxes_[:num_gt_idx, :]
+
+                        x_min, y_min, x_max, y_max = tf.split(boxes_value, [1, 1, 1, 1], axis=-1)
+                        boxes_value = tf.concat([y_min, x_min, y_max, x_max], axis=-1)
+
+                        x_min_norm = x_min / tf.constant(self.cfg.img_size[1], dtype=tf.float32)
+                        y_min_norm = y_min / tf.constant(self.cfg.img_size[0], dtype=tf.float32)
+                        x_max_norm = x_max / tf.constant(self.cfg.img_size[1], dtype=tf.float32)
+                        y_max_norm = y_max / tf.constant(self.cfg.img_size[0], dtype=tf.float32)
+                        boxes_value_norm = tf.concat([y_min_norm, x_min_norm, y_max_norm, x_max_norm], axis=-1)
+                        boxes_value_norm = tf.expand_dims(boxes_value_norm, axis=0)
+                        image_mask = tf.expand_dims(image_mask, axis=0)
+
+                        roi_image = tf.image.draw_bounding_boxes(image_mask, boxes_value_norm, colors=None)
+                        roi_images = tf.concat([roi_images, roi_image], axis=0)
+
+                    tf.summary.image("org_images:", batch_image_real, max_outputs=9, step=counter)
+                    tf.summary.image("roi_images:", roi_images, max_outputs=9, step=counter)
 
                     with tf.GradientTape(persistent=True) as tape:
                         batch_image_fake = G(batch_z)
                         d_fake = D(batch_image_fake)
-                        d_real = D(batch_image_real)
-
-                        d_average_loss, g_average_loss, AE_real_loss = compute_loss(d_real, d_fake, batch_image_real, batch_image_fake, self.k_t)
+                        d_real = D(roi_images)
+                        d_average_loss, g_average_loss, AE_real_loss = compute_loss(d_real, d_fake, roi_images, batch_image_fake, self.k_t)
                         # gp = mx_ops.gradient_penalty(D, batch_image_real, batch_image_fake, d_fake.shape[0],
                         #                              is_train=self.cfg.is_train)
                         # d_average_loss = d_average_loss + self.cfg.grad_penalty_weight * gp
@@ -129,7 +150,7 @@ class DetectionGAN:
                             cv2.imwrite(os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name) + '/' + '%08d' % (counter) + '.jpg', img)
                             print('add summary once....')
 
-                        if epoch % 2 == 0 and i == (epoch_size-1):
+                        if counter % 2000 == 0:
                             G.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),
                                                         'generator_%08d.ckpt' % (epoch)))
                             D.save_weights(os.path.join(os.path.join(self.cfg.results_dir, self.cfg.checkpoint_dir, self.cfg.tmp_result_name),

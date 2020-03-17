@@ -204,25 +204,27 @@ class Faster_RCNN(keras.Model):
 
     def call(self, inputs):
         num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
-        x = self.backbone(batch_image_real)
-        feature_map = self.neck(x)
+        res2, res3, res4, res5 = self.backbone(batch_image_real)
+        feature_map = self.neck(res4)
 
         # rpn
-        rpn_probs, rpn_deltas = self.rpn_head(feature_map)
+        rpn_logits, rpn_probs, rpn_deltas = self.rpn_head(feature_map)
         self.feature_shape = self.rpn_head.feature_shape
+
+
         # rcnn
         proposals = self.get_proposal(rpn_probs, rpn_deltas)  # 坐标归一化了
         self.rois, self.target_matchs, self.target_deltas = self.build_fast_rcnn_targer(proposals, boxes, labels,
                                                                          [self.cfg.img_size[0],
                                                                           self.cfg.img_size[1]])
         cropped_roi_features = self.roi_pooling(self.rois, feature_map)
-        rcnn_logits, rcnn_deltas = self.rcnn_head(cropped_roi_features)
+        rcnn_logits, rcnn_prob, rcnn_deltas = self.rcnn_head(cropped_roi_features)
 
 
-        return rpn_probs, rpn_deltas, rcnn_logits, rcnn_deltas
+        return rpn_logits, rpn_probs, rpn_deltas, rcnn_logits, rcnn_prob, rcnn_deltas
 
-    def loss_function(self, rpn_probs, rpn_deltas, gt_boxes, gt_classes, rcnn_logits, rcnn_deltas):
-        rpn_class_loss, rpn_location_loss = self.rpn_head.rpn_loss(rpn_probs=rpn_probs, rpn_deltas=rpn_deltas,
+    def loss_function(self, rpn_logits, rpn_deltas, gt_boxes, gt_classes, rcnn_logits, rcnn_deltas):
+        rpn_class_loss, rpn_location_loss = self.rpn_head.rpn_loss(rpn_logits=rpn_logits, rpn_deltas=rpn_deltas,
                                                                    gt_boxes=gt_boxes,
                                                                    gt_classes=gt_classes,
                                                                    feature_shape=self.feature_shape,
@@ -313,20 +315,20 @@ class Faster_RCNN(keras.Model):
                                                         crop_size=[14, 14])
         return cropped_roi_features
 
-    def get_detection_boxes(self, rcnn_logits, rcnn_deltas, image_size):
+    def get_detection_boxes(self, rcnn_probs, rcnn_deltas, image_size):
         '''
 
-        :param rcnn_logits:
+        :param rcnn_probs:
         :param rcnn_deltas:
         :param image_size:
         :return:
         '''
         H, W = image_size
         # Class IDs per ROI
-        class_ids = tf.argmax(rcnn_logits, axis=1, output_type=tf.int32)
+        class_ids = tf.argmax(rcnn_probs, axis=1, output_type=tf.int32)
         # Class probability of the top class of each ROI
-        indices = tf.stack([tf.range(rcnn_logits.shape[0]), class_ids], axis=1)
-        class_scores = tf.gather_nd(rcnn_logits, indices)
+        indices = tf.stack([tf.range(rcnn_probs.shape[0]), class_ids], axis=1)
+        class_scores = tf.gather_nd(rcnn_probs, indices)
 
         # Class-specific bounding box deltas
         deltas_specific = tf.gather_nd(rcnn_deltas, indices)
@@ -415,7 +417,7 @@ class FPN(keras.Model):
 
     def call(self, inputs):
         x = self.fpn_1(inputs)
-        x = self.fpn_2(x)  # [bs, 26,26,256]
+        x = self.fpn_2(x)  # [bs, 13, 13, 13]
         return x
 
 
@@ -439,6 +441,12 @@ class RPNHead(keras.Model):
         self.positive_fraction = positive_fraction
         self.pos_iou_thr = pos_iou_thr
         self.neg_iou_thr = neg_iou_thr
+        print('**********************************RPNHead**********************************')
+        print(' anchor_scales:{} \n anchor_ratios:{} \n proposal_count:{} \n nms_threshold:{} \n num_rpn_deltas:{} \n positive_fraction:{} \
+              \n pos_iou_thr:{} \n neg_iou_thr:{}'.format(
+            self.anchor_scales, self.anchor_ratios, self.proposal_count, self.nms_threshold, self.num_rpn_deltas, self.positive_fraction,
+            self.pos_iou_thr, self.neg_iou_thr))
+
         # Shared convolutional base of the RPN
         self.rpn_conv_shared = layers.Conv2D(512, (3, 3), padding='same',
                                              kernel_initializer='he_normal',
@@ -457,6 +465,8 @@ class RPNHead(keras.Model):
 
         :param inputs:
         :return:
+                rpn_probs: shape = [batch, num_anchors, 2]
+                rpn_deltas: shape = [batch, num_anchors, 4]
         '''
 
         shared = self.rpn_conv_shared(inputs)
@@ -465,21 +475,21 @@ class RPNHead(keras.Model):
 
         # class output
         # rpn_probs: shape----> [batch, num_anchors, 2]
-        x = self.rpn_class_raw(shared)
-        rpn_class_logits = tf.reshape(x, [tf.shape(x)[0], -1, 2])
+        rpn_class_logits = self.rpn_class_raw(shared)
+        rpn_class_logits = tf.reshape(rpn_class_logits, [tf.shape(rpn_class_logits)[0], -1, 2])
         rpn_probs = tf.nn.softmax(rpn_class_logits)
 
         # center, size output
         # rpn_deltas: shape----> [batch, num_anchors, 4]
-        x = self.rpn_delta_pred(shared)
-        rpn_deltas = tf.reshape(x, [tf.shape(x)[0], -1, 4])
+        rpn_deltas = self.rpn_delta_pred(shared)
+        rpn_deltas = tf.reshape(rpn_deltas, [tf.shape(rpn_deltas)[0], -1, 4])
 
-        return rpn_probs, rpn_deltas
+        return rpn_class_logits, rpn_probs, rpn_deltas
 
-    def rpn_loss(self, rpn_probs, rpn_deltas, gt_boxes, gt_classes, feature_shape, image_size):
+    def rpn_loss(self, rpn_logits, rpn_deltas, gt_boxes, gt_classes, feature_shape, image_size):
         '''
 
-        :param rpn_probs: [-1, num_anchors, 2]
+        :param rpn_logits: [-1, num_anchors, 2]
         :param rpn_deltas: [-1, num_anchors, 4]
         :param gt_boxes: [-1, num_gt, 4]
         :param gt_classes: [-1, num_gt]
@@ -492,7 +502,7 @@ class RPNHead(keras.Model):
                                                            gt_classes, self.neg_iou_thr,
                                                            self.pos_iou_thr, self.num_rpn_deltas,
                                                            self.positive_fraction)
-        class_loss = self.rpn_class_loss(rpn_probs, target_matchs)
+        class_loss = self.rpn_class_loss(rpn_logits, target_matchs)
         location_loss = self.rpn_location_loss(rpn_deltas, target_deltas, target_matchs)
 
         return class_loss, location_loss
@@ -645,7 +655,7 @@ class RCNNHead(keras.Model):
         deltas = self.rcnn_delta_fc(x)
         deltas = tf.reshape(deltas, (-1, self.num_classes, 4))
 
-        return probs, deltas
+        return logits, probs, deltas
     def rcnn_loss(self, logits, deltas, target_matchs, target_deltas):
         '''
 

@@ -8,29 +8,36 @@ import argparse, os, time
 import mx_networks_utils.mx_faster_rcnn_model as mx_faster_rcnn_model
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--gpu", default='1', type=str, help="assign gpu")
+parser.add_argument("--gpu", default='0', type=str, help="assign gpu")
 parser.add_argument("--is_train", default=True, type=bool, help="train or test")
 parser.add_argument("--dataset_dir", default='', type=str, help="dir of dataset")
-parser.add_argument("--dataset_name", default='coco', type=str, help="name of dataset")
+parser.add_argument("--dataset_name", default='voc', type=str, help="name of dataset")
 parser.add_argument("--label_dir", default='./Train_labels', type=str, help="dir of label file")
-parser.add_argument("--label_name", default='train_coco.txt', type=str, help="name of label file")
-parser.add_argument("--class_path", default='./Train_labels/coco.names', type=str, help="path of class file")
+parser.add_argument("--label_name", default='voc_train_val.txt', type=str, help="name of label file")
+parser.add_argument("--class_path", default='./Train_labels/voc2007.names', type=str, help="path of class file")
 parser.add_argument("--batch_size", default=1, type=int, help="batch size")
 parser.add_argument("--epoch", default=200, type=int, help="num of epoch")
-parser.add_argument('--img_size', nargs=3, default=[416, 416, 3], type=int, action='store',
+parser.add_argument('--img_size', nargs=3, default=[256, 256, 3], type=int, action='store',
                     help='with, height, channel of input image')
-parser.add_argument("--lr", default=1e-3, type=float, help="learning rate of G")
+parser.add_argument("--lr", default=5e-5, type=float, help="learning rate of G")
 parser.add_argument("--log_dir", default='./logs', type=str, help="dir to save log file")
 parser.add_argument("--checkpoint_dir", default='./checkpoint', type=str, help="dir to save train reslut")
 parser.add_argument("--results_dir", default='./results', type=str, help="results dir")
 parser.add_argument("--generate_image_dir", default='./generate_image', type=str, help="dir to save generated image")
-parser.add_argument("--tmp_result_name", default='faster-rcnn', type=str, help="tmp file save dir")
+parser.add_argument("--tmp_result_name", default='faster-rcnn-voc-test', type=str, help="tmp file save dir")
 cfg = parser.parse_args()
+
+print('*******************************input parser*******************************')
+print(' --gpu:{} \n --is_train:{} \n --dataset_dir:{} \n --dataset_name:{} \n --label_dir:{} \n --label_name:{} \
+      \n --class_path:{} \n --batch_size:{} \n --epoch:{} \n --img_size:{} \n --lr:{} \n --log_dir:{} \n --checkpoint_dir:{} \
+      \n --results_dir:{} \n --generate_image_dir:{} \n --tmp_result_name:{} \n'.format(
+    cfg.gpu, cfg.is_train, cfg.dataset_dir, cfg.dataset_name, cfg.label_dir, cfg.label_name, cfg.class_path, cfg.batch_size, cfg.epoch,
+    cfg.img_size, cfg.lr, cfg.log_dir, cfg.checkpoint_dir, cfg.results_dir, cfg.generate_image_dir, cfg.tmp_result_name))
 
 if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.gpu  # 指定第  块GPU可用
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
     # TF_CPP_MIN_LOG_LEVEL 取值 0 ： 0也是默认值，输出所有信息
     # TF_CPP_MIN_LOG_LEVEL 取值 1 ： 屏蔽通知信息
     # TF_CPP_MIN_LOG_LEVEL 取值 2 ： 屏蔽通知信息和警告信息

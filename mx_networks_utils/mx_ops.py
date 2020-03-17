@@ -1,8 +1,9 @@
-import  os, time
-import  numpy as np
-import  tensorflow as tf
-from    tensorflow import keras
+import os, time, cv2
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
 from tensorflow import random
+
 
 def celoss_ones(logits):
     # 计算属于与标签为1的交叉熵
@@ -16,6 +17,7 @@ def celoss_zeros(logits):
     y = tf.zeros_like(logits)
     loss = keras.losses.binary_crossentropy(y, logits, from_logits=True)
     return tf.reduce_mean(loss)
+
 
 def d_loss_fn(d_fake_logits, d_real_logits):
     # 真实图片与1之间的误差
@@ -32,6 +34,7 @@ def g_loss_fn(d_fake_logits):
     loss = celoss_ones(d_fake_logits)
     return loss
 
+
 def w_loss_fn(d_fake_logits, d_real_logits):
     '''
 
@@ -44,6 +47,7 @@ def w_loss_fn(d_fake_logits, d_real_logits):
     d_loss = -d_real_logits + d_fake_logits
     g_loss = -d_fake_logits
     return d_loss, g_loss
+
 
 def w_AE_loss_fn(AE_real, AE_fake, real, fake, k_t):
     '''
@@ -58,6 +62,7 @@ def w_AE_loss_fn(AE_real, AE_fake, real, fake, k_t):
     g_loss = AE_fake_loss
     return d_loss, g_loss, AE_real_loss
 
+
 def gradient_penalty(D, real, fake, batch_size, is_train=True):
     alpha = random.uniform([batch_size, 1, 1, 1], 0., 1.)
     # diff = fake - real
@@ -68,8 +73,9 @@ def gradient_penalty(D, real, fake, batch_size, is_train=True):
         pred = D(inter, is_train)
     grad = t.gradient(pred, [inter])[0]
     slopes = tf.sqrt(tf.reduce_sum(tf.square(grad), axis=[1, 2, 3]))
-    gp = tf.reduce_mean((slopes - 1.)**2, axis=1)
+    gp = tf.reduce_mean((slopes - 1.) ** 2, axis=1)
     return gp
+
 
 def mx_generate_anchors(feature_shape, anchor_scale, anchor_ratio, image_size):
     '''
@@ -80,14 +86,14 @@ def mx_generate_anchors(feature_shape, anchor_scale, anchor_ratio, image_size):
                       每个anchor_scale 除以 每个anchor_ratio的开方，即：
                       128有3个: 128 / sqrt(0.5), 128 / sqrt(1), 128 / sqrt(2) ----> h1, h2, h3
                       256有3个: 256 / sqrt(0.5), 256 / sqrt(1), 256 / sqrt(2) ----> h4, h5, h6
-                      512有3个: 256 / sqrt(0.5), 512 / sqrt(1), 512 / sqrt(2) ----> h7, h8, h9
+                      512有3个: 512 / sqrt(0.5), 512 / sqrt(1), 512 / sqrt(2) ----> h7, h8, h9
                       共9个：[h1, h2, h3, h4, h5, h6, h7, h8, h9]
 
                   anchor宽度(widths)的计算：
                       每个anchor_scale 乘以 每个anchor_ratio的开方，即：
                       128有3个: 128 * sqrt(0.5), 128 * sqrt(1), 128 * sqrt(2) ----> w1, w2, w3
                       256有3个: 256 * sqrt(0.5), 256 * sqrt(1), 256 * sqrt(2) ----> w4, w5, w6
-                      512有3个: 256 * sqrt(0.5), 512 * sqrt(1), 512 * sqrt(2) ----> w7, w8, w9
+                      512有3个: 512 * sqrt(0.5), 512 * sqrt(1), 512 * sqrt(2) ----> w7, w8, w9
                       共9个：[w1, w2, w3, w4, w5, w6, w7, w8, w9]
                   因此，共有9个anchor，分别为[[h1, w1], [h2, w2], [h3, w3], [h4, w4], [h5, w5], [h6, w6], [h7, w7], [h8, w8], [h9, w9]]
 
@@ -106,16 +112,18 @@ def mx_generate_anchors(feature_shape, anchor_scale, anchor_ratio, image_size):
     anchor_ratio = tf.constant(anchor_ratio, dtype=tf.float32)
     anchor_ratio = tf.reshape(anchor_ratio, [-1, 1])
 
-    heights = anchor_scale / tf.sqrt(anchor_ratio) # [[h1, h2, h3],
-                                                   #  [h4, h5, h6],
-                                                   #  [h7, h8, h9]]
+    heights = anchor_scale / tf.sqrt(anchor_ratio)  # [[h1, h2, h3],
+    #  [h4, h5, h6],
+    #  [h7, h8, h9]]
     widths = anchor_scale * tf.sqrt(anchor_ratio)  # [[w1, w2, w3],
-                                                   #  [w4, w5, w6],
-                                                   #  [w7, w8, w9]]
+    #  [w4, w5, w6],
+    #  [w7, w8, w9]]
 
     # Enumerate shifts in feature space
-    shifts_y = tf.range(tf.cast(feature_shape[0], tf.int32)) * tf.cast(feature_stride[0], tf.int32) # [0, 4, ... , 128-4]
-    shifts_x = tf.range(tf.cast(feature_shape[1], tf.int32)) * tf.cast(feature_stride[1], tf.int32) # [0, 8, ... , 128-8]
+    shifts_y = (tf.range(tf.cast(feature_shape[0], tf.float32)) + 0.5) * tf.cast(feature_stride[0],
+                                                                                 tf.float32)  # [2, 6, ... , 128-2]
+    shifts_x = (tf.range(tf.cast(feature_shape[1], tf.float32)) + 0.5) * tf.cast(feature_stride[1],
+                                                                                 tf.float32)  # [4, 12, ... , 128-4]
 
     # [A,B]=Meshgrid(a,b), meshgrid用于从数组a和b产生网格。生成的网格矩阵A和B大小是相同的, 它相当于a从一行重复增加到size(b)行，把b转置成一列再重复增加到size(a)列
     # 如果a，b为2维以上的，则先拍扁，例：
@@ -144,11 +152,15 @@ def mx_generate_anchors(feature_shape, anchor_scale, anchor_ratio, image_size):
 
     # Convert to corner coordinates (y1, x1, y2, x2)
     anchor_boxes = tf.concat([box_centers - 0.5 * box_sizes,
-                       box_centers + 0.5 * box_sizes], axis=1)
+                              box_centers + 0.5 * box_sizes], axis=1)
+    anchor_boxes = bbox_clip(anchor_boxes,
+                             tf.concat([tf.constant([0, 0], dtype=tf.float32), tf.cast(image_size, tf.float32)],
+                                       axis=0))
     anchor_boxes = tf.stop_gradient(anchor_boxes)
     return anchor_boxes
 
-def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, num_rpn_deltas, positive_fraction):
+
+def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, batch_size, positive_fraction):
     '''
 
     :param anchors: [num_anchors, 4] ----> [y_min, x_min, y_max, x_max]
@@ -156,14 +168,14 @@ def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, num_rpn
     :param gt_labels: [-1, num_gt] ----> class的取值范围:0~num_classes-1
     :param neg_iou_thr: float
     :param pos_iou_thr: float
-    :param num_rpn_deltas: int 取出样本的个数
+    :param batch_size: int 取出样本的个数
     :param positive_fraction：float 正样本所占的比例
     :return:
             target_matchs: shape=[num_anchors] 1=positive, -1=negative, 0=neutral anchor.
             target_deltas: num_rpn_deltas 正样本---->[dy, dx, dh, dw]   负样本---->[0,0,0,0]
     '''
-    gt_boxes = tf.reshape(gt_boxes, [-1, 4]) # [num_gt, 4]
-    gt_labels = tf.reshape(gt_labels, [-1]) # [num_gt]
+    gt_boxes = tf.reshape(gt_boxes, [-1, 4])  # [num_gt, 4]
+    gt_labels = tf.reshape(gt_labels, [-1])  # [num_gt]
 
     # 初始都为0， 一系列操作后， -1：负样本， 0：不关心的样本， 1：正样本
     target_matchs = tf.zeros(anchors.shape[0], dtype=tf.int32)
@@ -176,7 +188,6 @@ def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, num_rpn
 
     # Compute overlaps [num_anchors, num_gt_boxes]
     overlaps = mx_compute_overlap(anchors_convert, gt_boxes_convert)
-
     # Match anchors to GT Boxes
     # If an anchor overlaps ANY GT box with IoU >= 0.7 then it's positive.
     # If an anchor overlaps ALL GT box with IoU < 0.3 then it's negative.
@@ -207,22 +218,22 @@ def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, num_rpn
     # Subsample to balance positive and negative anchors
     # Don't let positives be more than half the anchors
     ids = tf.where(tf.equal(target_matchs, 1))  # [N_pos_anchors, 1], [15, 1]
-    ids = tf.squeeze(ids, 1) # [15]
+    ids = tf.squeeze(ids, 1)  # [15]
     # 目前正样本的数量 - 应有正样本的数量
-    extra = ids.shape.as_list()[0] - int(num_rpn_deltas * positive_fraction)
+    extra = ids.shape.as_list()[0] - int(batch_size * positive_fraction)
     # 如果目前正样本的数量 > 应有正样本的数量, 则随机去掉 (目前正样本的数量 - 应有正样本的数量)正样本
-    if extra > 0: # extra means the redundant pos_anchors
+    if extra > 0:  # extra means the redundant pos_anchors
         # Reset the extra random ones to neutral
         ids = tf.random.shuffle(ids)[:extra]
         target_matchs = tf.compat.v1.scatter_update(target_matchs, ids, 0)
 
     # Same for negative proposals
-    ids = tf.where(tf.equal(target_matchs, -1)) # [213748, 1]
+    ids = tf.where(tf.equal(target_matchs, -1))  # [213748, 1]
     ids = tf.squeeze(ids, 1)
     # 目前负样本的数量 - 应有负样本的数量
-    extra = ids.shape.as_list()[0] - (num_rpn_deltas - tf.reduce_sum(tf.cast(tf.equal(target_matchs, 1), tf.int32)))
+    extra = ids.shape.as_list()[0] - (batch_size - tf.reduce_sum(tf.cast(tf.equal(target_matchs, 1), tf.int32)))
     # 如果目前负样本的数量 > 应有负样本的数量, 则随机去掉 (目前负样本的数量 - 应有负样本的数量)正样本
-    if extra > 0: # 213507, so many negative anchors!
+    if extra > 0:  # 213507, so many negative anchors!
         # Rest the extra ones to neutral
         ids = tf.random.shuffle(ids)[:extra]
         target_matchs = tf.compat.v1.scatter_update(target_matchs, ids, 0)
@@ -237,31 +248,40 @@ def build_target(anchors, gt_boxes, gt_labels, neg_iou_thr, pos_iou_thr, num_rpn
     # 取出对应的gt
     anchor_idx = tf.gather_nd(anchor_iou_argmax, ids)
     gt = tf.gather(gt_boxes, anchor_idx)
-    target_deltas = mx_encode_bbox2delta(a, gt)
+    target_deltas = mx_encode_bbox(a, gt)
 
-    padding = tf.maximum(num_rpn_deltas - tf.shape(target_deltas)[0], 0)
+    padding = tf.maximum(batch_size - tf.shape(target_deltas)[0], 0)
     target_deltas = tf.pad(target_deltas, [(0, padding), (0, 0)])
     return target_matchs, target_deltas
 
 
-def mx_encode_bbox2delta(anchors, gt_boxes):
+def mx_encode_bbox(anchors, gt_boxes):
     '''
-
+    anchors:                gt_boxes:
+            [[0,0,3,3],               [[1,1,4,4],
+             [1,1,5,5],                [2,2,4,4],
+             [3,3,7,7],                [2,2,5,5]
+             [4,4,9,9]]                [5,5,8,8]]
+    输出：
+            [[ 0.33333334  0.33333334  0.          0.        ]
+             [ 0.          0.         -0.6931472  -0.6931472 ]
+             [-0.375      -0.375      -0.28768206 -0.28768206]
+             [ 0.          0.         -0.5108256  -0.5108256 ]]
     :param anchors: anchors: [-1, 4] ----> [y_min, x_min, y_max, x_max]
     :param gt_boxes: [-1, 4] ----> [y_min, x_min, y_max, x_max]
     :return:
     '''
     anchors = tf.cast(anchors, tf.float32)
     gt_boxes = tf.cast(gt_boxes, tf.float32)
-    height = anchors[:, 2:2+1] - anchors[:, 0:0+1]
-    width = anchors[:, 3:3+1] - anchors[:, 1:1+1]
-    center_y = anchors[:, 0:0+1] + 0.5 * height
-    center_x = anchors[:, 1:1+1] + 0.5 * width
+    height = anchors[:, 2:2 + 1] - anchors[:, 0:0 + 1]
+    width = anchors[:, 3:3 + 1] - anchors[:, 1:1 + 1]
+    center_y = anchors[:, 0:0 + 1] + 0.5 * height
+    center_x = anchors[:, 1:1 + 1] + 0.5 * width
 
-    gt_height = gt_boxes[:, 2:2+1] - gt_boxes[:, 0:0+1]
-    gt_width = gt_boxes[:, 3:3+1] - gt_boxes[:, 1:1+1]
-    gt_center_y = gt_boxes[:, 0:0+1] + 0.5 * gt_height
-    gt_center_x = gt_boxes[:, 1:1+1] + 0.5 * gt_width
+    gt_height = gt_boxes[:, 2:2 + 1] - gt_boxes[:, 0:0 + 1]
+    gt_width = gt_boxes[:, 3:3 + 1] - gt_boxes[:, 1:1 + 1]
+    gt_center_y = gt_boxes[:, 0:0 + 1] + 0.5 * gt_height
+    gt_center_x = gt_boxes[:, 1:1 + 1] + 0.5 * gt_width
 
     dy = (gt_center_y - center_y) / height
     dx = (gt_center_x - center_x) / width
@@ -271,9 +291,19 @@ def mx_encode_bbox2delta(anchors, gt_boxes):
     delta = tf.concat([dy, dx, dh, dw], axis=-1)
     return delta
 
-def mx_decode_bbox2delta(anchors, pred_boxes):
-    '''
 
+def mx_decode_bbox(anchors, pred_boxes):
+    '''
+        anchors:                pred_boxes:
+                [[0,0,3,3],               [[ 0.33333334  0.33333334  0.          0.        ]
+                 [1,1,5,5],                [ 0.          0.         -0.6931472  -0.6931472 ]
+                 [3,3,7,7],                [-0.375      -0.375      -0.28768206 -0.28768206]
+                 [4,4,9,9]]                [ 0.          0.         -0.5108256  -0.5108256 ]]
+        输出：
+            [[1. 1. 4. 4.]
+             [2. 2. 4. 4.]
+             [2. 2. 5. 5.]
+             [5. 5. 8. 8.]]
     :param anchors: anchors: [-1, 4] ----> [y_min, x_min, y_max, x_max]
     :param pred_boxes: 预测的结果 [-1, 4] ----> [dy, dx, dh, dw]
     :return:
@@ -281,15 +311,15 @@ def mx_decode_bbox2delta(anchors, pred_boxes):
     anchors = tf.cast(anchors, tf.float32)
     pred_boxes = tf.cast(pred_boxes, tf.float32)
 
-    height = anchors[:, 2:2+1] - anchors[:, 0:0+1]
-    width = anchors[:, 3:3+1] - anchors[:, 1:1+1]
-    center_y = anchors[:, 0:0+1] + 0.5 * height
-    center_x = anchors[:, 1:1+1] + 0.5 * width
+    height = anchors[:, 2:2 + 1] - anchors[:, 0:0 + 1]
+    width = anchors[:, 3:3 + 1] - anchors[:, 1:1 + 1]
+    center_y = anchors[:, 0:0 + 1] + 0.5 * height
+    center_x = anchors[:, 1:1 + 1] + 0.5 * width
 
-    pred_h = tf.exp(pred_boxes[:, 2:2+1]) * height
-    pred_w = tf.exp(pred_boxes[:, 3:4+1]) * width
-    pred_center_y = pred_boxes[:, 0:0+1] * height + center_y
-    pred_center_x = pred_boxes[:, 1:1+1] * width + center_x
+    pred_h = tf.exp(pred_boxes[:, 2:2 + 1]) * height
+    pred_w = tf.exp(pred_boxes[:, 3:4 + 1]) * width
+    pred_center_y = pred_boxes[:, 0:0 + 1] * height + center_y
+    pred_center_x = pred_boxes[:, 1:1 + 1] * width + center_x
 
     y_min = pred_center_y - 0.5 * pred_h
     x_min = pred_center_x - 0.5 * pred_w
@@ -299,12 +329,13 @@ def mx_decode_bbox2delta(anchors, pred_boxes):
     result = tf.concat([y_min, x_min, y_max, x_max], axis=-1)
     return result
 
+
 def bbox_clip(box, window):
     '''
     Args
     ---
         box: [N, (y1, x1, y2, x2)]
-        window: [4] in the form y1, x1, y2, x2
+        window: tensor, [4] in the form [y1, x1, y2, x2]
     '''
     # Split
     wy1, wx1, wy2, wx2 = tf.split(window, 4)
@@ -317,13 +348,15 @@ def bbox_clip(box, window):
     clipped = tf.concat([y1, x1, y2, x2], axis=1)
     clipped.set_shape((clipped.shape[0], 4))
     return clipped
+
+
 def mx_compute_overlap(anchors, gt_boxes):
     '''
     Introduction: 计算iou
     anchors:                        gt_boxes:
         [[0.0, 0.0, 1.0, 1.0],              [[0.5, 0.5, 1.0, 1.0],
          [0.2, 0.2, 1.5, 1.5],               [2.0, 1.5, 3.0, 4.0]]
-         [2.2, 1.7, 2.8, 4.1]
+         [2.2, 1.7, 2.8, 4.1]]
     输出为iou:
             [[0.25       0.        ]
              [0.14792901 0.        ]
@@ -336,15 +369,15 @@ def mx_compute_overlap(anchors, gt_boxes):
     :return: shape=[num_anchors, num_gt_boxes]
     '''
     anchors = tf.expand_dims(anchors, 1)
-    u_x0 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:,:,0]
-    u_y0 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:,:,1]
-    u_x1 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:,:,2]
-    u_y1 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:,:,3]
+    u_x0 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:, :, 0]
+    u_y0 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:, :, 1]
+    u_x1 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:, :, 2]
+    u_y1 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:, :, 3]
 
-    i_x0 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:,:,0]
-    i_y0 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:,:,1]
-    i_x1 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:,:,2]
-    i_y1 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:,:,3]
+    i_x0 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:, :, 0]
+    i_y0 = tf.where(anchors > gt_boxes, anchors, gt_boxes)[:, :, 1]
+    i_x1 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:, :, 2]
+    i_y1 = tf.where(anchors < gt_boxes, anchors, gt_boxes)[:, :, 3]
 
     i_w = i_x1 - i_x0
     i_h = i_y1 - i_y0
@@ -362,6 +395,7 @@ def mx_compute_overlap(anchors, gt_boxes):
 
     return iou
 
+
 def smooth_l1_loss(y_true, y_pred):
     '''
 
@@ -373,3 +407,15 @@ def smooth_l1_loss(y_true, y_pred):
     less_than_one = tf.cast(tf.less(diff, 1.0), tf.float32)
     loss = (less_than_one * 0.5 * diff ** 2) + (1 - less_than_one) * (diff - 0.5)
     return loss
+
+
+if __name__ == '__main__':
+    anchors = tf.constant([[1, 1, 4, 4],
+                           [2, 2, 7, 6],
+                           [1.1, 1.2, 3.9, 4.1],
+                           [2, 2, 5, 5]])
+    gt_boxes = tf.constant([[[1.1, 1.2, 3.9, 4.1],
+                             [1.4, 1.3, 2.3, 2.3]]])
+    gt_labels = 1
+    target_matchs, target_deltas = build_target(anchors, gt_boxes, gt_labels, neg_iou_thr=0.3, pos_iou_thr=0.7, batch_size=3, positive_fraction=0.7)
+    print(target_matchs, target_deltas)
