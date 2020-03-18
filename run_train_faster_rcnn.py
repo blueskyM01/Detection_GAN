@@ -15,6 +15,8 @@ parser.add_argument("--dataset_name", default='voc', type=str, help="name of dat
 parser.add_argument("--label_dir", default='./Train_labels', type=str, help="dir of label file")
 parser.add_argument("--label_name", default='voc_train_val.txt', type=str, help="name of label file")
 parser.add_argument("--class_path", default='./Train_labels/voc2007.names', type=str, help="path of class file")
+parser.add_argument("--pre_model", default='/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/faster-rcnn-voc-test/faster_rcnn_0003.ckpt',
+                    type=str, help="file of pre trained model")
 parser.add_argument("--batch_size", default=1, type=int, help="batch size")
 parser.add_argument("--epoch", default=200, type=int, help="num of epoch")
 parser.add_argument('--img_size', nargs=3, default=[256, 256, 3], type=int, action='store',
@@ -30,9 +32,9 @@ cfg = parser.parse_args()
 print('*******************************input parser*******************************')
 print(' --gpu:{} \n --is_train:{} \n --dataset_dir:{} \n --dataset_name:{} \n --label_dir:{} \n --label_name:{} \
       \n --class_path:{} \n --batch_size:{} \n --epoch:{} \n --img_size:{} \n --lr:{} \n --log_dir:{} \n --checkpoint_dir:{} \
-      \n --results_dir:{} \n --generate_image_dir:{} \n --tmp_result_name:{} \n'.format(
+      \n --results_dir:{} \n --generate_image_dir:{} \n --tmp_result_name:{} \n --pre_model:{} \n'.format(
     cfg.gpu, cfg.is_train, cfg.dataset_dir, cfg.dataset_name, cfg.label_dir, cfg.label_name, cfg.class_path, cfg.batch_size, cfg.epoch,
-    cfg.img_size, cfg.lr, cfg.log_dir, cfg.checkpoint_dir, cfg.results_dir, cfg.generate_image_dir, cfg.tmp_result_name))
+    cfg.img_size, cfg.lr, cfg.log_dir, cfg.checkpoint_dir, cfg.results_dir, cfg.generate_image_dir, cfg.tmp_result_name, cfg.pre_model))
 
 if __name__ == '__main__':
 

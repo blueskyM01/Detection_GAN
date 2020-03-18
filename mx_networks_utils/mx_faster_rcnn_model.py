@@ -27,6 +27,8 @@ class FasterRCNN:
         self.db_train = iter(self.dataset)
         self.classes = mx_utils.get_classes(self.cfg.class_path)
         self.num_classes = len(self.classes) + 1  # '0': backgroud
+        self.pre_model = self.cfg.pre_model
+
 
         self.anchor_scales = [128, 256, 512]
         self.anchor_ratios = [0.5, 1., 2.]
@@ -41,7 +43,7 @@ class FasterRCNN:
         self.rcnn_pos_frac = 0.25
         self.rcnn_pos_iou_thr = 0.5
         self.rcnn_neg_iou_thr = 0.5
-        self.rcnn_min_confidence = 0.4
+        self.rcnn_min_confidence = 0.04
         self.rcnn_nms_thr = 0.3
         self.rcnn_max_instance = 100
         self.rpn_cls_loss_weight = 1.
@@ -75,6 +77,12 @@ class FasterRCNN:
                                                           rcnn_nms_thr=self.rcnn_nms_thr,
                                                           rcnn_max_instance=self.rcnn_max_instance)
 
+            if os.path.exists(self.pre_model + '.index') == True:
+                self.faster_rcnn.load_weights(self.pre_model)
+                print('load pre-model {} successful!'.format(self.pre_model))
+            else:
+                print('no pre-model..................')
+            time.sleep(3)
             optimizer = keras.optimizers.Adam(learning_rate=self.cfg.lr, beta_1=0.5)
             # self.faster_rcnn.build(input_shape=(None, 416, 416, 3))
             epoch_size = self.dataset_len // self.cfg.batch_size
@@ -146,10 +154,10 @@ class FasterRCNN:
                         tf.summary.scalar('rpn_class_acc', float(self.faster_rcnn.rpn_class_acc), step=counter)
                         tf.summary.scalar('rcnn_class_loss', float(rcnn_class_loss), step=counter)
                         tf.summary.scalar('rcnn_location_loss', float(rcnn_location_loss), step=counter)
-
+                        tf.summary.scalar('rcnn_class_acc', float(self.faster_rcnn.rcnn_class_acc), step=counter)
                         # print(counter)
                         # cv2.imwrite('./tmp/' + str(counter) + '.jpg', image_drow_boxes[0].numpy() * 127.5 + 127.5)
-                    if counter % 40 == 0:
+                    if counter % 150 == 0:
                         # proposal result
                         roi_box = self.faster_rcnn.proposal_bbox
                         roi_prob = self.faster_rcnn.proposal_probs
@@ -170,8 +178,34 @@ class FasterRCNN:
 
                         img_path = os.path.join(
                             os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))
-                        cv2.imwrite(img_path + '/roi' + str(counter) + '.jpg', img)
+                        cv2.imwrite(img_path + '/' + str(counter) + '-roi.jpg', img)
+
+
                         # detection result
+                        final_classes = self.faster_rcnn.final_class
+                        final_scores = self.faster_rcnn.final_score
+                        final_boxes = self.faster_rcnn.final_box
+
+                        final_boxes = final_boxes.numpy()
+                        final_classes = final_classes.numpy().tolist()
+                        final_scores = final_scores.numpy().tolist()
+
+                        img = batch_image_real[0].numpy() * 127.5 + 127.5
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        for box, cls, score in zip(final_boxes, final_classes, final_scores):
+                            y0 = int(box[0] * self.cfg.img_size[0])
+                            x0 = int(box[1] * self.cfg.img_size[1])
+                            y1 = int(box[2] * self.cfg.img_size[0])
+                            x1 = int(box[3] * self.cfg.img_size[1])
+                            print(y0, x0, y1, x1)
+                            cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
+                            cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
+                            cv2.putText(img, self.classes[cls], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
+
+                        img_path = os.path.join(
+                            os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))
+                        cv2.imwrite(img_path + '/' + str(counter) + '-detect.jpg', img)
+
 
                     if counter % 2000 == 0:
                         self.faster_rcnn.save_weights(os.path.join(

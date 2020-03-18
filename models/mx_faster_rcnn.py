@@ -112,6 +112,9 @@ class Faster_RCNN(keras.Model):
         rcnn_class_loss = self.rcnn.rcnn_class_loss(rcnn_class_score, rcnn_classes_target)
         rcnn_location_loss = self.rcnn.rcnn_location_loss(rcnn_bbox_pred, rcnn_bbox_target, rcnn_classes_target)
 
+        # 3.4 detect image
+        self.final_class, self.final_box, self.final_score = self.rcnn.detect_image(rcnn_class_prob, rcnn_bbox_pred, rois)
+
         return rpn_class_loss, rpn_location_loss, rcnn_class_loss, rcnn_location_loss
 
 
@@ -643,3 +646,61 @@ class RCNNHead(keras.Model):
         else:
             loss = tf.constant(0, dtype=tf.float32)
         return loss
+
+    def detect_image(self, rcnn_class_prob, rcnn_bbox_pred, rois):
+        '''
+
+        :param rcnn_class_prob: [-1, num_classes]
+        :param rcnn_bbox_pred: [-1, num_classes * 4]
+        :param rois: [-1, 4]
+        :return:
+        '''
+        rois = tf.stop_gradient(rois)
+        rcnn_class_prob = tf.stop_gradient(rcnn_class_prob)
+        rcnn_bbox_pred = tf.reshape(rcnn_bbox_pred, [-1, self.num_classes, 4])
+        rcnn_bbox_pred = tf.stop_gradient(rcnn_bbox_pred)
+
+
+        best_classes = tf.argmax(rcnn_class_prob, axis=1)
+        best_boxes_idx = tf.concat([tf.reshape(tf.range(0, rcnn_bbox_pred.shape[0]), [-1, 1]) ,
+                                    tf.cast(tf.reshape(best_classes, [-1,1]), tf.int32)],
+                                   axis=1)
+        best_boxes = tf.gather_nd(rcnn_bbox_pred, best_boxes_idx)
+
+        decode_rcnn_bbox = ops.mx_decode_bbox(rois, best_boxes)
+        window = tf.constant([0, 0, 1, 1], dtype=tf.float32)
+        decode_rcnn_bbox = ops.bbox_clip(decode_rcnn_bbox, window) # [num_rois, 4]
+
+
+
+        rcnn_class_prob = rcnn_class_prob[:, 1:]
+
+        best_prob = tf.reduce_max(rcnn_class_prob, axis=1)
+        # print('best_prob:', best_prob)
+        get_value_idx = tf.where(best_prob > self.min_confidence)
+
+
+        get_value_prob = tf.gather(rcnn_class_prob, get_value_idx[:, 0])
+        get_value_box = tf.gather(decode_rcnn_bbox, get_value_idx[:, 0])
+        rcnn_probs = tf.reduce_max(get_value_prob, axis=1)
+
+
+        # 3. get top N to NMS
+        pre_nms_topN = min(self.max_instances, get_value_box.shape[0])
+        ix = tf.nn.top_k(rcnn_probs, pre_nms_topN, sorted=True).indices  # 先从大到小排序，取出前pre_nms_topN值，并返回索引
+        # 获取前pre_nms_topN个rpn_probs，
+        get_value_prob = tf.gather(get_value_prob, ix)
+        rcnn_probs = tf.gather(rcnn_probs, ix)
+        get_value_box = tf.gather(get_value_box, ix)
+        # anchors = tf.gather(anchors, ix)
+
+        # NMS, indices: [2000]
+        indices = tf.image.non_max_suppression(
+            get_value_box, rcnn_probs, self.max_instances, self.nms_threshold)
+
+        final_box = tf.gather(get_value_box, indices)
+        get_value_prob = tf.gather(get_value_prob, indices)
+        final_class = tf.argmax(get_value_prob, axis=1)
+        final_score = tf.reduce_max(get_value_prob,axis=1)
+
+        return final_class, final_box, final_score
