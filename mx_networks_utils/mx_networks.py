@@ -28,7 +28,7 @@ class mx_BE_Generator(keras.Model):
 
         self.module6 = mx_BE_Encoder_Module(filter_num)
 
-        self.to_image = layers.Conv2D(3, (3, 3), strides=1, padding='same', activation='tanh')
+        self.to_image = layers.Conv2D(1, (3, 3), strides=1, padding='same', activation='tanh')
 
     def call(self, z):
         x = self.fc(z)
@@ -91,7 +91,7 @@ class mx_BE_Discriminator(keras.Model):
 
         self.Emodule6 = mx_BE_Encoder_Module(filter_num)
 
-        self.to_image = layers.Conv2D(3, (3, 3), strides=1, padding='same', activation='tanh')
+        self.to_image = layers.Conv2D(1, (3, 3), strides=1, padding='same', activation='tanh')
 
     def call(self, image):
         x = self.from_image(image)

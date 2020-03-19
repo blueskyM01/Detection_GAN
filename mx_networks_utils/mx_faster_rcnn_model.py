@@ -43,7 +43,7 @@ class FasterRCNN:
         self.rcnn_pos_frac = 0.25
         self.rcnn_pos_iou_thr = 0.5
         self.rcnn_neg_iou_thr = 0.5
-        self.rcnn_min_confidence = 0.04
+        self.rcnn_min_confidence = 0.4
         self.rcnn_nms_thr = 0.3
         self.rcnn_max_instance = 100
         self.rpn_cls_loss_weight = 1.

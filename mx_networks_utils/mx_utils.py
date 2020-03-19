@@ -101,7 +101,7 @@ def m4_image_save_cv(images, rows=4, zero_mean=True):
             merge_image[i * img_height:(i + 1) * img_height, j * img_width:(j + 1) * img_width] = images[
                 i * w_nums + j]
 
-    merge_image = cv2.cvtColor(merge_image, cv2.COLOR_BGR2RGB)  # cv2默认为bgr顺序
+    # merge_image = cv2.cvtColor(merge_image, cv2.COLOR_BGR2RGB)  # cv2默认为bgr顺序
     return merge_image
 
 
