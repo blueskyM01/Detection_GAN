@@ -112,10 +112,35 @@ class Faster_RCNN(keras.Model):
         rcnn_class_loss = self.rcnn.rcnn_class_loss(rcnn_class_score, rcnn_classes_target)
         rcnn_location_loss = self.rcnn.rcnn_location_loss(rcnn_bbox_pred, rcnn_bbox_target, rcnn_classes_target)
 
-        # 3.4 detect image
+        # 2.4 detect image
         self.final_class, self.final_box, self.final_score = self.rcnn.detect_image(rcnn_class_prob, rcnn_bbox_pred, rois)
 
         return rpn_class_loss, rpn_location_loss, rcnn_class_loss, rcnn_location_loss
+
+    def detect_single_image(self, image):
+        out2, out3, out4, out5 = self.backbone(image)
+        feature_to_cropped = out4
+
+        # 1. rpn
+        feature_shape = feature_to_cropped.shape[1:3]
+        rpn_class_score, rpn_class_probs, rpn_bbox_pred = self.rpn(feature_to_cropped)
+
+        # 1.1 generate_anchors
+        anchors = self.rpn.mx_generate_anchors(feature_shape, self.anchor_scales, self.anchor_ratios, self.image_size)
+
+        # 1.2 get proposals
+        proposal_bbox, proposal_probs = self.rpn.get_proposals(rpn_class_probs, rpn_bbox_pred, anchors,
+                                                                         self.image_size)
+
+        # 2. rcnn
+
+        # 2.2 roi pooling
+        pooled_features = self.rcnn.roi_pooling(proposal_bbox, feature_to_cropped)
+        # 2.3 network output
+        rcnn_class_score, rcnn_class_prob, rcnn_bbox_pred = self.rcnn(pooled_features)
+        # 2.4 detect image
+        final_class, final_box, final_score = self.rcnn.detect_image(rcnn_class_prob, rcnn_bbox_pred, proposal_bbox)
+        return final_class, final_box, final_score
 
 
 class RPNHead(keras.Model):

@@ -100,7 +100,7 @@ def resnet50(training=True):
 
 # [3,4,23,3]
 def resnet101(training=True):
-    res = ResNet(layer_dims=[3,4,6,3], training=training)
+    res = ResNet(layer_dims=[3,4,23,3], training=training)
     return res
 
 def resnet152(training=True):

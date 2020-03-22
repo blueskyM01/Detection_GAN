@@ -157,7 +157,7 @@ class FasterRCNN:
                         tf.summary.scalar('rcnn_class_acc', float(self.faster_rcnn.rcnn_class_acc), step=counter)
                         # print(counter)
                         # cv2.imwrite('./tmp/' + str(counter) + '.jpg', image_drow_boxes[0].numpy() * 127.5 + 127.5)
-                    if counter % 150 == 0:
+                    if counter % 4000 == 0:
                         # proposal result
                         roi_box = self.faster_rcnn.proposal_bbox
                         roi_prob = self.faster_rcnn.proposal_probs
@@ -174,7 +174,7 @@ class FasterRCNN:
                             x1 = int(box[3] * self.cfg.img_size[1])
 
                             cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
-                            cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                            cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 2)
 
                         img_path = os.path.join(
                             os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))
@@ -197,10 +197,9 @@ class FasterRCNN:
                             x0 = int(box[1] * self.cfg.img_size[1])
                             y1 = int(box[2] * self.cfg.img_size[0])
                             x1 = int(box[3] * self.cfg.img_size[1])
-                            print(y0, x0, y1, x1)
+                            score = round(score, 2)
                             cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 255), 2)
-                            cv2.putText(img, str(score), (x1, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
-                            cv2.putText(img, self.classes[cls], (x0, y0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
+                            cv2.putText(img, self.classes[cls] + ':' + str(score), (x0+1, y0+5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
 
                         img_path = os.path.join(
                             os.path.join(self.cfg.results_dir, self.cfg.generate_image_dir, self.cfg.tmp_result_name))

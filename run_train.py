@@ -16,7 +16,7 @@ parser.add_argument("--label_dir", default='./Train_labels', type=str, help="dir
 parser.add_argument("--label_name", default='train_coco.txt', type=str, help="name of label file")
 parser.add_argument("--batch_size", default=16, type=int, help="batch size")
 parser.add_argument("--epoch", default=200, type=int, help="num of epoch")
-parser.add_argument('--img_size', nargs=3, default=[256, 256, 3], type=int, action='store',
+parser.add_argument('--img_size', nargs=3, default=[64, 64, 3], type=int, action='store',
                     help='with, height, channel of input image')
 parser.add_argument("--g_lr", default=0.00002, type=float, help="learning rate of G")
 parser.add_argument("--d_lr", default=0.00002, type=float, help="learning rate of D")

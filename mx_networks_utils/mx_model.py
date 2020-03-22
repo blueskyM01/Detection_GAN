@@ -3,7 +3,7 @@ import tensorflow as tf
 # 导入 keras 模型，不能使用 import keras，它导入的是标准的 Keras 库
 from tensorflow import keras
 from tensorflow.keras import layers, Sequential
-import argparse, os, time, sys, datetime, cv2
+import argparse, os, time, sys, datetime, cv2, logging
 sys.path.append('../')
 import mx_networks_utils.mx_networks as mx_net
 import mx_Dataset.mx_load_dataset as mx_data_loader
@@ -39,13 +39,13 @@ class DetectionGAN:
                 G = mx_net.mx_BE_Generator(self.cfg.filter_num)
                 G.build(input_shape=(None, 128))
                 D = mx_net.mx_BE_Discriminator(self.cfg.filter_num)
-                D.build(input_shape=(None, self.cfg.img_size[0], self.cfg.img_size[1], 1))
+                D.build(input_shape=(None, self.cfg.img_size[0], self.cfg.img_size[1], 3))
                 # 分别为生成器和判别器创建优化器
                 g_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.g_lr, beta_1=0.5)
                 d_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.d_lr, beta_1=0.5)
 
-                # G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/generator.ckpt')
-                # D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/1/discriminator.ckpt')
+                G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/generator_00000198.ckpt')
+                D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/discriminator_00000198.ckpt')
                 # print('Loaded chpt!!')
 
                 def compute_loss(AE_real, AE_fake, real, fake, k_t):
@@ -129,22 +129,26 @@ class DetectionGAN:
                 epoch_size = self.dataset_len // self.totoal_batch_size
                 batch_z_val = tf.random.normal([self.cfg.batch_size, 128])
                 counter = 0
+                log, file, stream, final_log_file = mx_utils.log_creater(os.path.join(self.cfg.results_dir,
+                                                                                      self.cfg.log_dir,
+                                                                                      self.cfg.tmp_result_name),
+                                                                         'log_file')
 
                 for epoch in range(self.cfg.epoch):
-                    for i in range(epoch_size):
+                    for step_idx in range(epoch_size):
                         starttime = datetime.datetime.now()
                         inputs = next(self.db_train)
-                        num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
-
-                        rois_imgs = self.conver_to_roi_image(num_gt.numpy(), batch_image_real.numpy(), boxes.numpy())
-                        batch_image_real = tf.convert_to_tensor(rois_imgs)
-                        batch_image_real = tf.cast(batch_image_real, tf.float32)
-                        inputs = (num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z)
+                        # num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
+                        #
+                        # rois_imgs = self.conver_to_roi_image(num_gt.numpy(), batch_image_real.numpy(), boxes.numpy())
+                        # batch_image_real = tf.convert_to_tensor(rois_imgs)
+                        # batch_image_real = tf.cast(batch_image_real, tf.float32)
+                        # inputs = (num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z)
 
 
                         d_loss, g_loss = distributed_train_step(inputs)
 
-                        if counter % 40 == 0:
+                        if counter % 50 == 0:
                             tf.summary.scalar('d_loss', float(d_loss), step=counter)
                             tf.summary.scalar('g_loss', float(g_loss), step=counter)
 
@@ -167,7 +171,16 @@ class DetectionGAN:
                         endtime = datetime.datetime.now()
                         timediff = (endtime - starttime).total_seconds()
                         print('epoch:[%3d/%3d] step:[%5d/%5d] time:%2.4f d_loss: %3.5f g_loss:%3.5f k_t:%3.5f' % \
-                              (epoch, self.cfg.epoch, i, epoch_size, timediff, float(d_loss), float(g_loss), float(self.k_t.numpy())))
+                              (epoch, self.cfg.epoch, step_idx, epoch_size, timediff, float(d_loss), float(g_loss), float(self.k_t.numpy())))
+
+                        formatter = logging.Formatter(
+                            'epoch:{:3d}/{:3d} step:{:6d}/{:6d} time:{:2.4f} d_loss:{:3.5f} g_loss:{:3.5f} k_t:{:1.5f}'.format(
+                                epoch, self.cfg.epoch, step_idx, epoch_size,
+                                timediff, float(d_loss),
+                                float(g_loss),
+                                float(self.k_t.numpy())),
+                                )
+                        mx_utils.log_write(log, file, stream, final_log_file, formatter)
 
                         counter += 1
 
