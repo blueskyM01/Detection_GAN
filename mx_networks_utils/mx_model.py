@@ -37,15 +37,22 @@ class DetectionGAN:
                 self.db_train = iter(dataset_distribute)
 
                 G = mx_net.mx_BE_Generator(self.cfg.filter_num)
-                G.build(input_shape=(None, 128))
+                G.build(input_shape=(None, 128+2048))
                 D = mx_net.mx_BE_Discriminator(self.cfg.filter_num)
                 D.build(input_shape=(None, self.cfg.img_size[0], self.cfg.img_size[1], 3))
                 # 分别为生成器和判别器创建优化器
                 g_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.g_lr, beta_1=0.5)
                 d_optimizer = keras.optimizers.Adam(learning_rate=self.cfg.d_lr, beta_1=0.5)
 
-                G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/generator_00000198.ckpt')
-                D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/discriminator_00000198.ckpt')
+                resnet101 = keras.applications.ResNet101(weights='imagenet', include_top=False)
+
+                num_layers = len(resnet101.layers)
+                print("Number of layers in the resnet101: ", num_layers)
+                for layer in resnet101.layers[:num_layers]:
+                    layer.trainable = False
+
+                # G.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/generator_00000198.ckpt')
+                # D.load_weights('/gs/home/yangjb/My_Job/AI_CODE/Detection_GAN/results/checkpoint/roi_image-c2/discriminator_00000198.ckpt')
                 # print('Loaded chpt!!')
 
                 def compute_loss(AE_real, AE_fake, real, fake, k_t):
@@ -93,7 +100,10 @@ class DetectionGAN:
                     # tf.summary.image("roi_images:", roi_images, max_outputs=9, step=counter)
 
                     with tf.GradientTape(persistent=True) as tape:
-                        batch_image_fake = G(batch_z)
+                        feature_map = resnet101(batch_image_real)
+                        feature_map = tf.nn.l2_normalize(tf.reduce_mean(feature_map, axis=[1, 2]), axis=1)
+                        z_feat = tf.concat([batch_z, feature_map], axis=-1)
+                        batch_image_fake = G(z_feat)
                         d_fake = D(batch_image_fake)
                         d_real = D(batch_image_real)
                         d_average_loss, g_average_loss, AE_real_loss = compute_loss(d_real, d_fake, batch_image_real, batch_image_fake, self.k_t)
@@ -138,7 +148,7 @@ class DetectionGAN:
                     for step_idx in range(epoch_size):
                         starttime = datetime.datetime.now()
                         inputs = next(self.db_train)
-                        # num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
+                        num_gt, batch_image_real, boxes, labels, img_width, img_height, batch_z = inputs
                         #
                         # rois_imgs = self.conver_to_roi_image(num_gt.numpy(), batch_image_real.numpy(), boxes.numpy())
                         # batch_image_real = tf.convert_to_tensor(rois_imgs)
@@ -148,11 +158,14 @@ class DetectionGAN:
 
                         d_loss, g_loss = distributed_train_step(inputs)
 
-                        if counter % 50 == 0:
+                        if counter % 200 == 0:
                             tf.summary.scalar('d_loss', float(d_loss), step=counter)
                             tf.summary.scalar('g_loss', float(g_loss), step=counter)
 
-                            val_images = G(batch_z_val)
+                            feature_map = resnet101(batch_image_real)
+                            feature_map = tf.nn.l2_normalize(tf.reduce_mean(feature_map, axis=[1, 2]), axis=1)
+                            z_feat = tf.concat([batch_z, feature_map], axis=-1)
+                            val_images = G(z_feat)
 
                             tf.summary.image("val_images:", val_images, max_outputs=9, step=counter)
 
